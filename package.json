@@ -1,0 +1,41 @@
+{
+  "name": "agentwallet",
+  "version": "0.1.0",
+  "description": "Financial infrastructure for AI agents - wallets, spend controls, and transaction rails",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:sdk": "npm run dev --workspace=packages/sdk",
+    "dev:dashboard": "npm run dev --workspace=packages/dashboard",
+    "dev": "concurrently \"npm run dev:sdk\" \"npm run dev:dashboard\"",
+    "build": "npm run build --workspaces",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JackD720/agentwallet.git"
+  },
+  "keywords": [
+    "ai-agents",
+    "fintech",
+    "wallet",
+    "payments",
+    "infrastructure",
+    "spend-controls",
+    "ai"
+  ],
+  "author": "Jack Davis <Jackdavis720@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/JackD720/agentwallet/issues"
+  },
+  "homepage": "https://github.com/JackD720/agentwallet#readme",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
