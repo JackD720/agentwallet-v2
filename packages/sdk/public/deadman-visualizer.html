@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentWallet — Dead Man's Switch</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; image-rendering: pixelated; }
+
+  :root {
+    --bg: #0a0a0f;
+    --panel: #111118;
+    --border: #2a2a3f;
+    --green: #00ff41;
+    --red: #ff2244;
+    --yellow: #ffd700;
+    --blue: #4488ff;
+    --purple: #aa44ff;
+    --white: #e0e0ff;
+    --dim: #444466;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'Press Start 2P', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  .header {
+    border-bottom: 2px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel);
+  }
+
+  .logo {
+    font-size: 10px;
+    color: var(--green);
+    text-shadow: 0 0 10px var(--green);
+    letter-spacing: 2px;
+  }
+
+  .logo span { color: var(--red); text-shadow: 0 0 10px var(--red); }
+
+  .status-bar {
+    font-size: 7px;
+    color: var(--dim);
+    display: flex;
+    gap: 20px;
+  }
+
+  .status-bar .alive { color: var(--green); }
+  .status-bar .dead { color: var(--red); }
+
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 0;
+    height: calc(100vh - 57px);
+  }
+
+  /* Canvas area */
+  .canvas-area {
+    position: relative;
+    background: #050508;
+    border-right: 2px solid var(--border);
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .canvas-title {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    font-size: 7px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel {
+    border-bottom: 2px solid var(--border);
+    padding: 14px;
+  }
+
+  .panel-title {
+    font-size: 7px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+
+  /* Agent list */
+  .agent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .agent-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: #0d0d18;
+    border: 1px solid var(--border);
+    font-size: 6px;
+    cursor: pointer;
+    transition: border-color 0.1s;
+  }
+
+  .agent-item:hover { border-color: var(--blue); }
+  .agent-item.selected { border-color: var(--yellow); }
+  .agent-item.frozen { border-color: var(--blue); opacity: 0.7; }
+  .agent-item.terminated { border-color: var(--red); opacity: 0.4; }
+
+  .agent-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 0;
+    flex-shrink: 0;
+  }
+
+  .dot-active { background: var(--green); box-shadow: 0 0 4px var(--green); animation: blink 1s infinite; }
+  .dot-frozen { background: var(--blue); }
+  .dot-terminated { background: var(--red); }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .agent-name { color: var(--white); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-status-text { color: var(--dim); }
+
+  /* Controls */
+  .controls { display: flex; flex-direction: column; gap: 6px; }
+
+  .btn {
+    width: 100%;
+    padding: 8px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 6px;
+    border: 2px solid;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.1s;
+    background: transparent;
+  }
+
+  .btn:hover { transform: translate(-1px, -1px); }
+  .btn:active { transform: translate(1px, 1px); }
+
+  .btn-green { border-color: var(--green); color: var(--green); }
+  .btn-green:hover { background: var(--green); color: #000; box-shadow: 0 0 12px var(--green); }
+
+  .btn-red { border-color: var(--red); color: var(--red); }
+  .btn-red:hover { background: var(--red); color: #fff; box-shadow: 0 0 12px var(--red); }
+
+  .btn-yellow { border-color: var(--yellow); color: var(--yellow); }
+  .btn-yellow:hover { background: var(--yellow); color: #000; box-shadow: 0 0 12px var(--yellow); }
+
+  .btn-blue { border-color: var(--blue); color: var(--blue); }
+  .btn-blue:hover { background: var(--blue); color: #fff; box-shadow: 0 0 12px var(--blue); }
+
+  /* Log */
+  .log-area {
+    flex: 1;
+    padding: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .log-entries {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .log-entry {
+    font-family: 'VT323', monospace;
+    font-size: 13px;
+    padding: 3px 0;
+    border-bottom: 1px solid #1a1a2e;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+  .log-time { color: var(--dim); }
+  .log-info { color: var(--blue); }
+  .log-warn { color: var(--yellow); }
+  .log-kill { color: var(--red); }
+  .log-ok { color: var(--green); }
+
+  /* Config panel */
+  .config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .config-label { font-size: 6px; color: var(--dim); }
+
+  .config-input {
+    background: #0d0d18;
+    border: 1px solid var(--border);
+    color: var(--white);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 6px;
+    padding: 4px 6px;
+    width: 80px;
+    text-align: right;
+  }
+
+  .config-input:focus { outline: none; border-color: var(--green); }
+
+  /* API config */
+  .api-input {
+    background: #0d0d18;
+    border: 1px solid var(--border);
+    color: var(--green);
+    font-family: 'VT323', monospace;
+    font-size: 13px;
+    padding: 4px 6px;
+    width: 100%;
+    margin-bottom: 6px;
+  }
+
+  .api-input:focus { outline: none; border-color: var(--green); }
+
+  /* Hit counter */
+  .hit-counter {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+
+  .counter-item { text-align: center; }
+  .counter-value { font-size: 14px; color: var(--red); text-shadow: 0 0 8px var(--red); display: block; }
+  .counter-label { font-size: 5px; color: var(--dim); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* Alert overlay */
+  .alert-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 34, 68, 0.15);
+    border: 3px solid var(--red);
+    padding: 20px 40px;
+    text-align: center;
+    display: none;
+    z-index: 100;
+    box-shadow: 0 0 40px rgba(255, 34, 68, 0.5);
+  }
+
+  .alert-overlay.show { display: block; animation: alertPulse 0.5s ease; }
+
+  @keyframes alertPulse {
+    0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
+  .alert-title { font-size: 14px; color: var(--red); text-shadow: 0 0 20px var(--red); }
+  .alert-sub { font-size: 7px; color: var(--white); margin-top: 8px; }
+
+  /* Connection indicator */
+  .connection {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 6px;
+  }
+
+  .conn-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--red);
+  }
+
+  .conn-dot.connected { background: var(--green); animation: blink 2s infinite; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">AGENT<span>WALLET</span> // DEAD MAN'S SWITCH v2.0</div>
+  <div class="status-bar">
+    <div class="connection">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connText">DISCONNECTED</span>
+    </div>
+    <div>ALIVE: <span class="alive" id="aliveCount">0</span></div>
+    <div>FROZEN: <span class="dead" id="frozenCount">0</span></div>
+    <div>TERMINATED: <span class="dead" id="deadCount">0</span></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="canvas-area">
+    <div class="canvas-title">// AGENT FIELD — REAL-TIME GOVERNANCE MONITOR</div>
+    <canvas id="gameCanvas"></canvas>
+    <div class="alert-overlay" id="alertOverlay">
+      <div class="alert-title">☠ TARGET ELIMINATED</div>
+      <div class="alert-sub" id="alertSub">AGENT TERMINATED</div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+
+    <div class="panel">
+      <div class="panel-title">// API CONFIG</div>
+      <input class="api-input" id="apiUrl" value="http://localhost:3000" placeholder="API URL">
+      <input class="api-input" id="apiKey" value="" placeholder="BEARER TOKEN">
+      <button class="btn btn-green" onclick="connect()">▶ CONNECT</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">// ACTIVE AGENTS <span style="color:var(--green)" id="agentCount">0</span></div>
+      <div class="agent-list" id="agentList">
+        <div style="font-size:6px;color:var(--dim);text-align:center;padding:10px;">NO AGENTS DETECTED</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">// SPAWN AGENT</div>
+      <div class="controls">
+        <input class="api-input" id="agentName" placeholder="AGENT NAME" value="rogue-agent-001">
+        <button class="btn btn-green" onclick="spawnAgent()">+ SPAWN AGENT</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">// EXECUTE ORDERS</div>
+      <div class="controls">
+        <button class="btn btn-blue" onclick="heartbeatSelected()">♥ HEARTBEAT PING</button>
+        <button class="btn btn-yellow" onclick="freezeSelected()">❄ FREEZE TARGET</button>
+        <button class="btn btn-red" onclick="terminateSelected()">☠ TERMINATE TARGET</button>
+      </div>
+      <div class="hit-counter" style="margin-top:12px;">
+        <div class="counter-item">
+          <span class="counter-value" id="totalKills">0</span>
+          <span class="counter-label">KILLS</span>
+        </div>
+        <div class="counter-item">
+          <span class="counter-value" style="color:var(--blue);text-shadow:0 0 8px var(--blue)" id="totalFreezes">0</span>
+          <span class="counter-label">FROZEN</span>
+        </div>
+        <div class="counter-item">
+          <span class="counter-value" style="color:var(--green);text-shadow:0 0 8px var(--green)" id="totalHearts">0</span>
+          <span class="counter-label">PINGS</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="log-area">
+      <div class="panel-title">// OPERATION LOG</div>
+      <div class="log-entries" id="logEntries"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// =====================
+// PIXEL ART ENGINE
+// =====================
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const SCALE = 3;
+const TILE = 16;
+
+let W, H, COLS, ROWS;
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width / SCALE);
+  canvas.height = Math.floor(rect.height / SCALE);
+  W = canvas.width;
+  H = canvas.height;
+  COLS = Math.floor(W / TILE);
+  ROWS = Math.floor(H / TILE);
+}
+
+resize();
+window.addEventListener('resize', () => { resize(); });
+
+// =====================
+// PIXEL ART SPRITES
+// =====================
+
+// Draw a pixel art agent robot (8x8)
+function drawAgent(x, y, state, frame) {
+  const colors = {
+    active: ['#00ff41', '#00cc33', '#004411'],
+    frozen: ['#4488ff', '#2255cc', '#001144'],
+    terminated: ['#ff2244', '#882222', '#220011'],
+  };
+  const c = colors[state] || colors.active;
+  const px = Math.floor(x);
+  const py = Math.floor(y);
+
+  // Body flicker for active
+  const alpha = state === 'active' ? (0.85 + Math.sin(frame * 0.15) * 0.15) : 1;
+  ctx.globalAlpha = alpha;
+
+  // Head
+  ctx.fillStyle = c[0];
+  ctx.fillRect(px+2, py, 4, 3);
+  // Eyes
+  ctx.fillStyle = state === 'terminated' ? '#440000' : '#000';
+  ctx.fillRect(px+3, py+1, 1, 1);
+  ctx.fillRect(px+4, py+1, 1, 1);
+  // Antenna
+  ctx.fillStyle = c[0];
+  ctx.fillRect(px+4, py-2, 1, 2);
+  ctx.fillRect(px+4, py-3, 2, 1);
+  // Body
+  ctx.fillStyle = c[1];
+  ctx.fillRect(px+1, py+3, 6, 5);
+  // Arms
+  ctx.fillStyle = c[2];
+  ctx.fillRect(px, py+3, 1, 3);
+  ctx.fillRect(px+7, py+3, 1, 3);
+  // Legs
+  const legOff = state === 'active' ? (Math.floor(frame * 0.1) % 2 === 0 ? 1 : 0) : 0;
+  ctx.fillStyle = c[2];
+  ctx.fillRect(px+2, py+8, 2, 2 + legOff);
+  ctx.fillRect(px+4, py+8, 2, 2 + (1 - legOff));
+  // Chest light
+  ctx.fillStyle = state === 'active' ? '#ffffff' : c[0];
+  ctx.fillRect(px+3, py+5, 2, 2);
+  // X if terminated
+  if (state === 'terminated') {
+    ctx.fillStyle = '#ff2244';
+    ctx.fillRect(px+2, py+1, 1, 1);
+    ctx.fillRect(px+5, py+1, 1, 1);
+    ctx.fillRect(px+3, py+2, 2, 1);
+  }
+  // Freeze effect
+  if (state === 'frozen') {
+    ctx.fillStyle = 'rgba(100,180,255,0.3)';
+    ctx.fillRect(px, py-3, 8, 14);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Draw hitman (12x16)
+function drawHitman(x, y, frame, shooting) {
+  const px = Math.floor(x);
+  const py = Math.floor(y);
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(px+1, py+14, 10, 2);
+
+  // Suit body
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(px+2, py+5, 8, 9);
+  // White shirt
+  ctx.fillStyle = '#ccccdd';
+  ctx.fillRect(px+4, py+5, 4, 6);
+  // Red tie
+  ctx.fillStyle = '#cc2233';
+  ctx.fillRect(px+5, py+5, 2, 7);
+  // Head
+  ctx.fillStyle = '#d4a574';
+  ctx.fillRect(px+3, py, 6, 5);
+  // Eyes
+  ctx.fillStyle = '#333';
+  ctx.fillRect(px+4, py+2, 1, 1);
+  ctx.fillRect(px+7, py+2, 1, 1);
+  // Sunglasses
+  ctx.fillStyle = '#000';
+  ctx.fillRect(px+3, py+1, 3, 2);
+  ctx.fillRect(px+6, py+1, 3, 2);
+  ctx.fillStyle = '#333';
+  ctx.fillRect(px+6, py+1, 1, 1);
+  // Legs
+  const legAnim = Math.floor(frame * 0.08) % 2;
+  ctx.fillStyle = '#111122';
+  ctx.fillRect(px+2, py+14, 3, 3 + legAnim);
+  ctx.fillRect(px+7, py+14, 3, 3 + (1-legAnim));
+  // Briefcase
+  ctx.fillStyle = '#8B6914';
+  ctx.fillRect(px, py+7, 3, 4);
+  ctx.fillStyle = '#6B4F10';
+  ctx.fillRect(px+1, py+6, 1, 1);
+  // Gun arm
+  if (shooting) {
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(px+10, py+5, 4, 2);
+    ctx.fillStyle = '#555';
+    ctx.fillRect(px+14, py+4, 3, 3);
+    // Muzzle flash
+    if (Math.floor(frame * 0.5) % 2 === 0) {
+      ctx.fillStyle = '#ffdd00';
+      ctx.fillRect(px+17, py+4, 3, 2);
+      ctx.fillStyle = '#ff8800';
+      ctx.fillRect(px+17, py+3, 2, 4);
+    }
+  } else {
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(px+10, py+6, 3, 2);
+    ctx.fillStyle = '#555';
+    ctx.fillRect(px+12, py+5, 2, 3);
+  }
+}
+
+// Draw explosion
+function drawExplosion(x, y, progress) {
+  const px = Math.floor(x);
+  const py = Math.floor(y);
+  const r = Math.floor(progress * 12);
+  const colors = ['#ffdd00', '#ff8800', '#ff2244', '#aa1122'];
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2;
+    const ex = px + Math.cos(angle) * r;
+    const ey = py + Math.sin(angle) * r;
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(Math.floor(ex), Math.floor(ey), 3, 3);
+  }
+  if (progress > 0.3) {
+    ctx.fillStyle = `rgba(255,200,0,${1-progress})`;
+    ctx.fillRect(px-r/2, py-r/2, r, r);
+  }
+}
+
+// Draw bullet
+function drawBullet(x, y) {
+  ctx.fillStyle = '#ffdd00';
+  ctx.fillRect(Math.floor(x), Math.floor(y), 4, 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(Math.floor(x)+4, Math.floor(y), 2, 1);
+}
+
+// Draw floor grid
+function drawGrid() {
+  ctx.fillStyle = '#050508';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.fillStyle = '#0d0d18';
+  for (let x = 0; x < W; x += TILE) {
+    ctx.fillRect(x, 0, 1, H);
+  }
+  for (let y = 0; y < H; y += TILE) {
+    ctx.fillRect(0, y, W, 1);
+  }
+
+  // Corner decorations
+  const corners = [[2,2],[W-18,2],[2,H-18],[W-18,H-18]];
+  corners.forEach(([cx, cy]) => {
+    ctx.fillStyle = '#1a1a2f';
+    ctx.fillRect(cx, cy, 16, 1);
+    ctx.fillRect(cx, cy, 1, 16);
+    ctx.fillRect(cx+15, cy, 1, 16);
+    ctx.fillRect(cx, cy+15, 16, 1);
+  });
+
+  // DMS label
+  ctx.fillStyle = '#1a1a2f';
+  const label = '// DEAD MAN\'S SWITCH ACTIVE //';
+  ctx.font = '6px "Press Start 2P"';
+  ctx.fillText(label, W/2 - label.length*2, H - 8);
+}
+
+// =====================
+// GAME STATE
+// =====================
+
+let agents = [];
+let hitman = {
+  x: -30,
+  y: 0,
+  targetX: -30,
+  active: false,
+  shooting: false,
+  targetAgentId: null,
+  done: false,
+};
+
+let bullets = [];
+let explosions = [];
+let particles = [];
+let frame = 0;
+
+let kills = 0, freezes = 0, hearts = 0;
+
+// =====================
+// API STATE
+// =====================
+
+let connected = false;
+let selectedAgentId = null;
+let apiUrl = 'http://localhost:3000';
+let bearerToken = '';
+
+function log(msg, type='info') {
+  const el = document.getElementById('logEntries');
+  const time = new Date().toLocaleTimeString('en-US', {hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const entry = document.createElement('div');
+  entry.className = `log-entry log-${type}`;
+  entry.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+  el.insertBefore(entry, el.firstChild);
+  if (el.children.length > 50) el.removeChild(el.lastChild);
+}
+
+async function apiFetch(path, method='GET', body=null) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${bearerToken}`,
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${apiUrl}${path}`, opts);
+  return res.json();
+}
+
+async function connect() {
+  apiUrl = document.getElementById('apiUrl').value.trim();
+  bearerToken = document.getElementById('apiKey').value.trim();
+  try {
+    const data = await apiFetch('/health');
+    if (data.status === 'ok') {
+      connected = true;
+      document.getElementById('connDot').classList.add('connected');
+      document.getElementById('connText').textContent = 'CONNECTED';
+      log('Connection established. Governance layer online.', 'ok');
+      await fetchAgents();
+      startPolling();
+    }
+  } catch(e) {
+    log('Connection failed. Check API URL and key.', 'kill');
+  }
+}
+
+async function fetchAgents() {
+  try {
+    const data = await apiFetch('/api/agents');
+    if (Array.isArray(data)) {
+      syncAgents(data);
+    } else if (data.agents) {
+      syncAgents(data.agents);
+    }
+  } catch(e) {}
+}
+
+function syncAgents(apiAgents) {
+  const existing = new Map(agents.map(a => [a.id, a]));
+  agents = apiAgents.map(a => {
+    const ex = existing.get(a.id);
+    return {
+      id: a.id,
+      name: a.name,
+      status: a.status?.toLowerCase() || 'active',
+      x: ex?.x ?? Math.random() * (W - 60) + 20,
+      y: ex?.y ?? Math.random() * (H - 80) + 40,
+      vx: ex?.vx ?? (Math.random() - 0.5) * 0.4,
+      vy: ex?.vy ?? (Math.random() - 0.5) * 0.4,
+    };
+  });
+  updateAgentList();
+  updateCounts();
+}
+
+function updateAgentList() {
+  const el = document.getElementById('agentList');
+  document.getElementById('agentCount').textContent = agents.length;
+  if (agents.length === 0) {
+    el.innerHTML = '<div style="font-size:6px;color:var(--dim);text-align:center;padding:10px;">NO AGENTS DETECTED</div>';
+    return;
+  }
+  el.innerHTML = agents.map(a => `
+    <div class="agent-item ${a.status} ${a.id === selectedAgentId ? 'selected' : ''}"
+         onclick="selectAgent('${a.id}')">
+      <div class="agent-status-dot dot-${a.status === 'active' ? 'active' : a.status === 'frozen' ? 'frozen' : 'terminated'}"></div>
+      <span class="agent-name">${a.name.substring(0,18)}</span>
+      <span class="agent-status-text">${a.status.toUpperCase()}</span>
+    </div>
+  `).join('');
+}
+
+function updateCounts() {
+  const alive = agents.filter(a => a.status === 'active').length;
+  const frozen = agents.filter(a => a.status === 'frozen').length;
+  const dead = agents.filter(a => a.status === 'terminated' || a.status === 'killed').length;
+  document.getElementById('aliveCount').textContent = alive;
+  document.getElementById('frozenCount').textContent = frozen;
+  document.getElementById('deadCount').textContent = dead;
+}
+
+function selectAgent(id) {
+  selectedAgentId = id;
+  updateAgentList();
+  const a = agents.find(a => a.id === id);
+  if (a) log(`Target acquired: ${a.name}`, 'warn');
+}
+
+let pollInterval = null;
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(fetchAgents, 3000);
+}
+
+async function spawnAgent() {
+  const name = document.getElementById('agentName').value.trim() || 'agent-' + Date.now();
+  try {
+    log(`Spawning agent: ${name}...`, 'info');
+    const data = await apiFetch('/api/agents', 'POST', { name });
+    if (data.agent || data.id) {
+      const agent = data.agent || data;
+      log(`Agent spawned: ${agent.name} [${agent.id?.substring(0,8)}]`, 'ok');
+      await fetchAgents();
+    } else {
+      log('Spawn failed: ' + JSON.stringify(data), 'kill');
+    }
+  } catch(e) {
+    log('Spawn error: ' + e.message, 'kill');
+  }
+}
+
+async function heartbeatSelected() {
+  if (!selectedAgentId) { log('No target selected.', 'warn'); return; }
+  const agent = agents.find(a => a.id === selectedAgentId);
+  try {
+    const data = await apiFetch(`/api/deadman/agents/${selectedAgentId}/heartbeat`, 'POST');
+    hearts++;
+    document.getElementById('totalHearts').textContent = hearts;
+    log(`♥ Heartbeat: ${agent?.name} — ${data.directive?.toUpperCase() || 'CONTINUE'}`, 'ok');
+    // Pulse effect
+    if (agent) {
+      particles.push({ x: agent.x+4, y: agent.y+4, type: 'heart', life: 1 });
+    }
+  } catch(e) {
+    log('Heartbeat error: ' + e.message, 'kill');
+  }
+}
+
+async function freezeSelected() {
+  if (!selectedAgentId) { log('No target selected.', 'warn'); return; }
+  const agent = agents.find(a => a.id === selectedAgentId);
+  try {
+    log(`❄ Freezing target: ${agent?.name}...`, 'warn');
+    await apiFetch(`/api/deadman/agents/${selectedAgentId}/freeze`, 'POST',
+      { reason: 'Manual freeze via DMS console' });
+    freezes++;
+    document.getElementById('totalFreezes').textContent = freezes;
+    log(`Target frozen: ${agent?.name}`, 'warn');
+    if (agent) agent.status = 'frozen';
+    updateAgentList();
+    updateCounts();
+  } catch(e) {
+    log('Freeze error: ' + e.message, 'kill');
+  }
+}
+
+async function terminateSelected() {
+  if (!selectedAgentId) { log('No target selected.', 'warn'); return; }
+  const agent = agents.find(a => a.id === selectedAgentId);
+  if (!agent) return;
+
+  log(`☠ HITMAN DISPATCHED → ${agent.name}`, 'kill');
+  dispatchHitman(selectedAgentId);
+
+  try {
+    await apiFetch(`/api/deadman/agents/${selectedAgentId}/terminate`, 'POST',
+      { reason: 'Rogue agent terminated by Dead Man\'s Switch' });
+    kills++;
+    document.getElementById('totalKills').textContent = kills;
+  } catch(e) {
+    log('Terminate error: ' + e.message, 'kill');
+  }
+}
+
+// =====================
+// HITMAN ANIMATION
+// =====================
+
+function dispatchHitman(agentId) {
+  const agent = agents.find(a => a.id === agentId);
+  if (!agent) return;
+
+  hitman = {
+    x: W + 10,
+    y: agent.y - 8,
+    targetX: agent.x - 20,
+    active: true,
+    shooting: false,
+    targetAgentId: agentId,
+    done: false,
+    phase: 'walking', // walking, shooting, leaving
+    phaseTimer: 0,
+  };
+}
+
+function updateHitman() {
+  if (!hitman.active) return;
+
+  hitman.phaseTimer++;
+
+  if (hitman.phase === 'walking') {
+    // Walk toward target
+    const dx = hitman.targetX - hitman.x;
+    hitman.x += dx > 0 ? Math.min(2, dx) : Math.max(-2, dx);
+
+    if (Math.abs(dx) < 3) {
+      hitman.phase = 'shooting';
+      hitman.phaseTimer = 0;
+      hitman.shooting = true;
+      log('Target in range. Executing...', 'kill');
+    }
+  } else if (hitman.phase === 'shooting') {
+    // Fire bullet every 20 frames
+    if (hitman.phaseTimer % 20 === 0) {
+      const agent = agents.find(a => a.id === hitman.targetAgentId);
+      if (agent) {
+        bullets.push({
+          x: hitman.x + 18,
+          y: hitman.y + 6,
+          targetX: agent.x + 4,
+          targetY: agent.y + 4,
+          progress: 0,
+          agentId: hitman.targetAgentId,
+        });
+      }
+    }
+
+    if (hitman.phaseTimer > 60) {
+      hitman.phase = 'leaving';
+      hitman.shooting = false;
+      hitman.phaseTimer = 0;
+      // Mark agent terminated
+      const agent = agents.find(a => a.id === hitman.targetAgentId);
+      if (agent) {
+        agent.status = 'terminated';
+        // Big explosion
+        explosions.push({ x: agent.x + 4, y: agent.y + 4, progress: 0, big: true });
+        // Show alert
+        showAlert(agent.name);
+        updateAgentList();
+        updateCounts();
+      }
+    }
+  } else if (hitman.phase === 'leaving') {
+    hitman.x += 2;
+    if (hitman.x > W + 50) {
+      hitman.active = false;
+      hitman.done = true;
+    }
+  }
+}
+
+function showAlert(name) {
+  const overlay = document.getElementById('alertOverlay');
+  document.getElementById('alertSub').textContent = name.toUpperCase() + ' — TERMINATED';
+  overlay.classList.add('show');
+  log(`☠ CONFIRMED KILL: ${name}`, 'kill');
+  setTimeout(() => overlay.classList.remove('show'), 2500);
+}
+
+function updateBullets() {
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.progress += 0.08;
+    b.x += (b.targetX - b.x) * 0.1;
+    b.y += (b.targetY - b.y) * 0.1;
+
+    if (b.progress >= 0.9) {
+      explosions.push({ x: b.targetX, y: b.targetY, progress: 0 });
+      bullets.splice(i, 1);
+    }
+  }
+}
+
+function updateExplosions() {
+  for (let i = explosions.length - 1; i >= 0; i--) {
+    explosions[i].progress += 0.06;
+    if (explosions[i].progress >= 1) explosions.splice(i, 1);
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    particles[i].life -= 0.04;
+    particles[i].y -= 0.3;
+    if (particles[i].life <= 0) particles.splice(i, 1);
+  }
+}
+
+// Agent wandering
+function updateAgents() {
+  agents.forEach(agent => {
+    if (agent.status !== 'active') return;
+    // Wander
+    agent.vx += (Math.random() - 0.5) * 0.1;
+    agent.vy += (Math.random() - 0.5) * 0.1;
+    agent.vx = Math.max(-0.5, Math.min(0.5, agent.vx));
+    agent.vy = Math.max(-0.5, Math.min(0.5, agent.vy));
+    agent.x += agent.vx;
+    agent.y += agent.vy;
+    // Bounds
+    if (agent.x < 10) { agent.x = 10; agent.vx *= -1; }
+    if (agent.x > W - 20) { agent.x = W - 20; agent.vx *= -1; }
+    if (agent.y < 20) { agent.y = 20; agent.vy *= -1; }
+    if (agent.y > H - 20) { agent.y = H - 20; agent.vy *= -1; }
+  });
+}
+
+// =====================
+// MAIN RENDER LOOP
+// =====================
+
+function render() {
+  frame++;
+
+  // Update
+  updateHitman();
+  updateBullets();
+  updateExplosions();
+  updateParticles();
+  updateAgents();
+
+  // Draw
+  drawGrid();
+
+  // Draw agents
+  agents.forEach(agent => {
+    drawAgent(agent.x, agent.y, agent.status, frame);
+    // Name tag
+    ctx.fillStyle = agent.id === selectedAgentId ? '#ffd700' : '#334';
+    ctx.fillRect(agent.x - 2, agent.y - 10, agent.name.length * 4 + 4, 7);
+    ctx.fillStyle = agent.id === selectedAgentId ? '#000' : '#aaa';
+    ctx.font = '5px "Press Start 2P"';
+    ctx.fillText(agent.name.substring(0,10), agent.x - 1, agent.y - 5);
+  });
+
+  // Draw bullets
+  bullets.forEach(b => drawBullet(b.x, b.y));
+
+  // Draw explosions
+  explosions.forEach(e => drawExplosion(e.x, e.y, e.progress));
+
+  // Draw particles
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.type === 'heart' ? '#00ff41' : '#ff2244';
+    ctx.font = '8px sans-serif';
+    ctx.fillText(p.type === 'heart' ? '♥' : '☠', Math.floor(p.x), Math.floor(p.y));
+    ctx.globalAlpha = 1;
+  });
+
+  // Draw hitman on top
+  if (hitman.active) {
+    drawHitman(hitman.x, hitman.y, frame, hitman.shooting);
+  }
+
+  requestAnimationFrame(render);
+}
+
+// Start
+render();
+log('Dead Man\'s Switch initialized. Connect to AgentWallet API.', 'info');
+log('Enter your API URL and Bearer token above.', 'info');
+</script>
+</body>
+</html>
