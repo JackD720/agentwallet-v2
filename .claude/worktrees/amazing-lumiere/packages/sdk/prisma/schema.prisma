@@ -1,0 +1,262 @@
+// Agent Wallet SDK - Database Schema
+// Financial infrastructure for AI agents
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// The human or company that owns agents
+model Owner {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  apiKey    String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  agents    Agent[]
+}
+
+// An AI agent that can hold wallets and transact
+model Agent {
+  id        String   @id @default(uuid())
+  name      String
+  ownerId   String
+  owner     Owner    @relation(fields: [ownerId], references: [id])
+  apiKey    String   @unique @default(uuid())
+  status    AgentStatus @default(ACTIVE)
+  metadata  Json?    // Flexible field for agent-specific data
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  wallets        Wallet[]
+  // V2 relations
+  lineage        AgentLineage?          @relation("LineageAgent")
+  childLineages  AgentLineage[]         @relation("LineageParent")
+  deadManSwitch  DeadManSwitchConfig?
+}
+
+
+enum AgentStatus {
+  ACTIVE
+  PAUSED
+  SUSPENDED
+  FROZEN
+  TERMINATED
+  KILLED
+}
+
+// ─────────────────────────────────────────────────────────────────
+// V2: SPAWN GOVERNANCE
+// ─────────────────────────────────────────────────────────────────
+
+// Tracks parent/child relationships between agents
+model AgentLineage {
+  agentId       String    @id
+  agent         Agent     @relation("LineageAgent", fields: [agentId], references: [id])
+  parentId      String?
+  parent        Agent?    @relation("LineageParent", fields: [parentId], references: [id])
+  rootId        String    // The original human-created root agent
+  depth         Int       @default(0)
+  childrenIds   String[]  @default([]) // Array of child agent IDs
+  status        String    @default("active") // active | suspended | terminated
+  spawnPolicy   Json?     // Serialized SpawnPolicy
+  spawnedAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Audit log for spawn events
+model SpawnEvent {
+  id           String   @id @default(uuid())
+  parentId     String
+  childId      String
+  depth        Int
+  inheritedPolicy Json?
+  authorized   Boolean
+  reason       String?
+  createdAt    DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────
+// V2: CROSS-AGENT TRANSACTION POLICIES
+// ─────────────────────────────────────────────────────────────────
+
+model CrossAgentPolicy {
+  id                      String   @id @default(uuid())
+  ownerId                 String
+  sourceAgentId           String
+  targetAgentId           String?  // NULL = wildcard (any agent)
+  targetAgentGroup        String?  // OR target a named group
+  maxPerTransaction       Decimal  @default(100) @db.Decimal(18, 2)
+  maxDailyToTarget        Decimal  @default(1000) @db.Decimal(18, 2)
+  maxDailyAllAgents       Decimal  @default(5000) @db.Decimal(18, 2)
+  requireHumanApprovalAbove Decimal @default(500) @db.Decimal(18, 2)
+  allowedPaymentTypes     String[] @default(["compute", "data", "api_call", "service"])
+  requireMutualPolicy     Boolean  @default(true)
+  settlementMode          String   @default("immediate") // immediate | batched | escrow
+  minCounterpartyTrustScore Decimal @default(0) @db.Decimal(4, 3)
+  enabled                 Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// Record of cross-agent transactions
+model CrossAgentTransaction {
+  id                  String   @id @default(uuid())
+  sourceAgentId       String
+  targetAgentId       String
+  amount              Decimal  @db.Decimal(18, 2)
+  currency            String   @default("USD")
+  paymentType         String   // compute | data | api_call | service
+  description         String?
+  policyId            String?
+  authorized          Boolean  @default(false)
+  authorizationMethod String?  // auto | human_approved | escalated
+  settlementStatus    String   @default("pending") // pending | settled | failed | escrowed
+  settlementRail      String?  // stripe_x402 | coinbase | internal
+  requiresHuman       Boolean  @default(false)
+  metadata            Json?
+  createdAt           DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────
+// V2: DEAD MAN'S SWITCH (ENHANCED)
+// ─────────────────────────────────────────────────────────────────
+
+model DeadManSwitchConfig {
+  agentId                   String   @id
+  agent                     Agent    @relation(fields: [agentId], references: [id])
+  // Heartbeat
+  heartbeatIntervalSeconds  Int      @default(60)
+  missedHeartbeatThreshold  Int      @default(3)
+  lastHeartbeatAt           DateTime?
+  // Anomaly detection
+  anomalyWindowMinutes      Int      @default(60)
+  anomalySpendMultiplier    Decimal  @default(3.0) @db.Decimal(5, 2)
+  anomalyTxCountMultiplier  Decimal  @default(5.0) @db.Decimal(5, 2)
+  // Velocity
+  maxTxPerMinute            Int      @default(10)
+  maxUniqueVendorsPerHour   Int      @default(20)
+  // Escalation ladder
+  onAnomaly                 String   @default("alert")     // alert | throttle | freeze | terminate
+  onMissedHeartbeat         String   @default("freeze")    // alert | throttle | freeze | terminate
+  onManualTrigger           String   @default("terminate") // alert | throttle | freeze | terminate
+  // Cascade
+  cascadeToChildren         Boolean  @default(true)
+  notifyParentOnTrigger     Boolean  @default(true)
+  // Recovery
+  autoRecover               Boolean  @default(false)
+  recoveryRequiresHuman     Boolean  @default(true)
+  enabled                   Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+// Every time the dead man's switch fires
+model DeadManSwitchEvent {
+  id           String   @id @default(uuid())
+  agentId      String
+  triggerType  String   // heartbeat | anomaly | velocity | manual | cascade
+  actionTaken  String   // alert | throttle | freeze | terminate
+  details      Json?
+  cascadedTo   String[] @default([])
+  resolved     Boolean  @default(false)
+  resolvedBy   String?  // operator user ID
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────
+// V2: AGENT GROUPS (for cross-agent policy targeting)
+// ─────────────────────────────────────────────────────────────────
+
+model AgentGroup {
+  id        String   @id @default(uuid())
+  ownerId   String
+  name      String
+  agentIds  String[] @default([])
+  createdAt DateTime @default(now())
+}
+
+// A wallet holding funds for an agent
+model Wallet {
+  id           String        @id @default(uuid())
+  agentId      String
+  agent        Agent         @relation(fields: [agentId], references: [id])
+  balance      Decimal       @default(0) @db.Decimal(18, 2)
+  currency     String        @default("USD")
+  status       WalletStatus  @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  rules        SpendRule[]
+  transactions Transaction[]
+}
+
+enum WalletStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+// Spend control rules for a wallet
+model SpendRule {
+  id         String     @id @default(uuid())
+  walletId   String
+  wallet     Wallet     @relation(fields: [walletId], references: [id])
+  ruleType   RuleType
+  parameters Json       // Flexible params for different rule types
+  active     Boolean    @default(true)
+  priority   Int        @default(0) // Higher priority rules evaluated first
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+enum RuleType {
+  DAILY_LIMIT          // Max spend per day
+  PER_TRANSACTION_LIMIT // Max per single transaction
+  WEEKLY_LIMIT         // Max spend per week
+  MONTHLY_LIMIT        // Max spend per month
+  CATEGORY_WHITELIST   // Only allow certain categories
+  CATEGORY_BLACKLIST   // Block certain categories
+  RECIPIENT_WHITELIST  // Only pay certain recipients
+  RECIPIENT_BLACKLIST  // Block certain recipients
+  TIME_WINDOW          // Only allow transactions during certain hours
+  REQUIRES_APPROVAL    // Flag transactions for human approval above threshold
+}
+
+// A transaction (attempted or completed)
+model Transaction {
+  id              String            @id @default(uuid())
+  walletId        String
+  wallet          Wallet            @relation(fields: [walletId], references: [id])
+  amount          Decimal           @db.Decimal(18, 2)
+  currency        String            @default("USD")
+  recipientId     String?           // Could be another agent wallet or external
+  recipientType   RecipientType     @default(EXTERNAL)
+  category        String?
+  description     String?
+  status          TransactionStatus @default(PENDING)
+  ruleCheckResults Json?            // Which rules passed/failed
+  metadata        Json?             // Additional transaction data
+  createdAt       DateTime          @default(now())
+  completedAt     DateTime?
+}
+
+enum RecipientType {
+  AGENT_WALLET  // Another agent on the platform
+  EXTERNAL      // External payment (Stripe, bank, etc.)
+  ESCROW        // Held in escrow
+}
+
+enum TransactionStatus {
+  PENDING           // Awaiting rule check
+  APPROVED          // Passed rules, ready to execute
+  AWAITING_APPROVAL // Flagged for human review
+  REJECTED          // Failed rules
+  COMPLETED         // Successfully executed
+  FAILED            // Execution failed
+  CANCELLED         // Cancelled by user/agent
+}

@@ -1,0 +1,40 @@
+{
+  "name": "@agentwallet/sdk",
+  "version": "0.1.0",
+  "description": "Financial infrastructure for AI agents - wallets, spend controls, and transaction rails",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JackD720/agentwallet.git",
+    "directory": "packages/sdk"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "keywords": [
+    "ai-agents",
+    "fintech",
+    "wallet",
+    "payments",
+    "infrastructure"
+  ],
+  "author": "Jack Davis <Jackdavis720@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "express": "^4.21.0",
+    "uuid": "^10.0.0",
+    "dotenv": "^16.4.5",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "stripe": "^14.5.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "nodemon": "^3.1.7"
+  }
+}

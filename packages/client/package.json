@@ -1,0 +1,39 @@
+{
+  "name": "@jackd720/agentwallet",
+  "version": "1.0.0",
+  "description": "Governance infrastructure for AI agents — wallets, spend controls, dead man's switch",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "scripts": {
+    "test": "node examples/basic.js"
+  },
+  "keywords": [
+    "ai-agents",
+    "governance",
+    "wallet",
+    "spend-controls",
+    "dead-mans-switch",
+    "fintech",
+    "infrastructure",
+    "llm",
+    "autonomous-agents"
+  ],
+  "author": "Jack Davis <jack@agentwallet.ai>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JackD720/agentwallet.git"
+  },
+  "homepage": "https://agentwallet-v2-sdk.vercel.app",
+  "bugs": {
+    "url": "https://github.com/JackD720/agentwallet/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ]
+}

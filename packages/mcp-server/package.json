@@ -1,0 +1,33 @@
+{
+  "name": "@jackd720/agentwallet-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for AgentWallet — governance infrastructure for AI agents",
+  "type": "module",
+  "bin": {
+    "agentwallet-mcp": "./bin/server.js"
+  },
+  "main": "./src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node src/test.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "governance",
+    "spend-controls",
+    "agentwallet",
+    "fintech"
+  ],
+  "author": "Jack Driscoll",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^3.22.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
