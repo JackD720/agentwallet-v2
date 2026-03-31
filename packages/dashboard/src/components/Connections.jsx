@@ -1,9 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const ACCENT = "#59E2FD";
 const ACCENT_BG = "#f0fcff";
 const ACCENT_BORDER = "#c8f4fd";
 const DARK = "#1a1a1a";
+
+function ls(key, fallback) {
+  try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
 
 function Toggle({ on, onChange }) {
   return (
@@ -23,11 +30,7 @@ function StatusDot({ connected }) {
 }
 
 function Card({ children, style }) {
-  return (
-    <div style={{ background: "#fff", border: "1px solid #ebebeb", borderRadius: 14, overflow: "hidden", ...style }}>
-      {children}
-    </div>
-  );
+  return <div style={{ background: "#fff", border: "1px solid #ebebeb", borderRadius: 14, overflow: "hidden", ...style }}>{children}</div>;
 }
 
 function CardHead({ icon, title, description, connected, children }) {
@@ -52,13 +55,8 @@ function Input({ label, placeholder, value, onChange, type = "text", hint }) {
   return (
     <div style={{ marginBottom: 14 }}>
       {label && <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>}
-      <input
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{ width: "100%", padding: "9px 12px", border: "1px solid #ebebeb", borderRadius: 8, fontSize: 13, color: DARK, fontFamily: "inherit", outline: "none", background: "#fafafa" }}
-      />
+      <input type={type} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
+        style={{ width: "100%", padding: "9px 12px", border: "1px solid #ebebeb", borderRadius: 8, fontSize: 13, color: DARK, fontFamily: "inherit", outline: "none", background: "#fafafa" }} />
       {hint && <div style={{ fontSize: 11, color: "#ccc", marginTop: 4 }}>{hint}</div>}
     </div>
   );
@@ -88,64 +86,114 @@ function SupplierRow({ supplier, onRemove }) {
   );
 }
 
+const defaultSuppliers = [
+  { id: 1, name: "Hershey's", email: "orders@hersheys.com", product: "Chocolate chips", price: "4.20" },
+  { id: 2, name: "ePac", email: "orders@epacflexibles.com", product: "Packaging bags", price: "0.45" },
+  { id: 3, name: "Boston Baking", email: "production@bostonbaking.com", product: "Co-packing", price: "2.10" },
+];
+
 export default function Connections() {
-  const [activeTab, setActiveTab] = useState("connections");
+  const [activeTab, setActiveTab] = useState("profile");
 
   // Profile
-  const [yourName, setYourName] = useState(() => { try { return localStorage.getItem('bytem_yourName') || ''; } catch { return ''; } });
-  const [companyName, setCompanyName] = useState(() => { try { return localStorage.getItem('bytem_companyName') || ''; } catch { return ''; } });
+  const [yourName, setYourName] = useState(() => ls("bytem_yourName", ""));
+  const [companyName, setCompanyName] = useState(() => ls("bytem_companyName", ""));
   const [profileSaved, setProfileSaved] = useState(false);
 
-  function saveProfile() {
-    try { localStorage.setItem('bytem_yourName', yourName); localStorage.setItem('bytem_companyName', companyName); } catch {}
-    saveWithDelay(setProfileSaved);
-  }
-
   // Email
-  const [emailConnected, setEmailConnected] = useState(false);
-  const [emailAddress, setEmailAddress] = useState("");
+  const [emailConnected, setEmailConnected] = useState(() => ls("bytem_emailConnected", false));
+  const [emailAddress, setEmailAddress] = useState(() => ls("bytem_emailAddress", ""));
   const [emailSaved, setEmailSaved] = useState(false);
-  const [slackConnected, setSlackConnected] = useState(false);
-  const [slackWebhook, setSlackWebhook] = useState("");
+
+  // Slack
+  const [slackConnected, setSlackConnected] = useState(() => ls("bytem_slackConnected", false));
+  const [slackWebhook, setSlackWebhook] = useState(() => ls("bytem_slackWebhook", ""));
   const [slackSaved, setSlackSaved] = useState(false);
 
-  // Inventory
-  const [sheetsConnected, setSheetsConnected] = useState(false);
-  const [sheetsUrl, setSheetsUrl] = useState("");
-  const [skuCol, setSkuCol] = useState("A");
-  const [qtyCol, setQtyCol] = useState("B");
+  // Sheets
+  const [sheetsConnected, setSheetsConnected] = useState(() => ls("bytem_sheetsConnected", false));
+  const [sheetsUrl, setSheetsUrl] = useState(() => ls("bytem_sheetsUrl", ""));
+  const [skuCol, setSkuCol] = useState(() => ls("bytem_skuCol", "A"));
+  const [qtyCol, setQtyCol] = useState(() => ls("bytem_qtyCol", "B"));
   const [sheetsSaved, setSheetsSaved] = useState(false);
-  const [kaizntreeConnected, setKaizntreeConnected] = useState(false);
-  const [kaizntreeKey, setKaizntreeKey] = useState("");
+
+  // Kaizntree
+  const [kaizntreeConnected, setKaizntreeConnected] = useState(() => ls("bytem_kaizntreeConnected", false));
+  const [kaizntreeKey, setKaizntreeKey] = useState(() => ls("bytem_kaizntreeKey", ""));
   const [kaizntreeSaved, setKaizntreeSaved] = useState(false);
 
-  // Payments
-  const [stripeConnected, setStripeConnected] = useState(false);
-  const [maxPerTxn, setMaxPerTxn] = useState("10000");
-  const [maxMonthly, setMaxMonthly] = useState("25000");
-  const [approvalThreshold, setApprovalThreshold] = useState("5000");
-  const [autoApprove, setAutoApprove] = useState(true);
+  // Stripe
+  const [stripeConnected, setStripeConnected] = useState(() => ls("bytem_stripeConnected", false));
+
+  // Spend rules
+  const [maxPerTxn, setMaxPerTxn] = useState(() => ls("bytem_maxPerTxn", "10000"));
+  const [maxMonthly, setMaxMonthly] = useState(() => ls("bytem_maxMonthly", "25000"));
+  const [approvalThreshold, setApprovalThreshold] = useState(() => ls("bytem_approvalThreshold", "5000"));
+  const [autoApprove, setAutoApprove] = useState(() => ls("bytem_autoApprove", true));
   const [rulesSaved, setRulesSaved] = useState(false);
 
   // Suppliers
-  const [suppliers, setSuppliers] = useState([
-    { id: 1, name: "Hershey's", email: "orders@hersheys.com", product: "Chocolate chips", price: "4.20" },
-    { id: 2, name: "ePac", email: "orders@epacflexibles.com", product: "Packaging bags", price: "0.45" },
-    { id: 3, name: "Boston Baking", email: "production@bostonbaking.com", product: "Co-packing", price: "2.10" },
-  ]);
+  const [suppliers, setSuppliers] = useState(() => ls("bytem_suppliers", defaultSuppliers));
   const [newSupplier, setNewSupplier] = useState({ name: "", email: "", product: "", price: "" });
   const [showAddForm, setShowAddForm] = useState(false);
+  const [supplierSaved, setSupplierSaved] = useState(false);
+
+  function saveWithDelay(setter) { setter(true); setTimeout(() => setter(false), 2000); }
+
+  function saveProfile() {
+    lsSet("bytem_yourName", yourName);
+    lsSet("bytem_companyName", companyName);
+    saveWithDelay(setProfileSaved);
+  }
+
+  function saveEmail() {
+    lsSet("bytem_emailConnected", emailConnected);
+    lsSet("bytem_emailAddress", emailAddress);
+    saveWithDelay(setEmailSaved);
+  }
+
+  function saveSlack() {
+    lsSet("bytem_slackConnected", slackConnected);
+    lsSet("bytem_slackWebhook", slackWebhook);
+    saveWithDelay(setSlackSaved);
+  }
+
+  function saveSheets() {
+    lsSet("bytem_sheetsConnected", sheetsConnected);
+    lsSet("bytem_sheetsUrl", sheetsUrl);
+    lsSet("bytem_skuCol", skuCol);
+    lsSet("bytem_qtyCol", qtyCol);
+    saveWithDelay(setSheetsSaved);
+  }
+
+  function saveKaizntree() {
+    lsSet("bytem_kaizntreeConnected", kaizntreeConnected);
+    lsSet("bytem_kaizntreeKey", kaizntreeKey);
+    saveWithDelay(setKaizntreeSaved);
+  }
+
+  function saveRules() {
+    lsSet("bytem_maxPerTxn", maxPerTxn);
+    lsSet("bytem_maxMonthly", maxMonthly);
+    lsSet("bytem_approvalThreshold", approvalThreshold);
+    lsSet("bytem_autoApprove", autoApprove);
+    saveWithDelay(setRulesSaved);
+  }
 
   function addSupplier() {
     if (!newSupplier.name || !newSupplier.email) return;
-    setSuppliers(prev => [...prev, { ...newSupplier, id: Date.now() }]);
+    const updated = [...suppliers, { ...newSupplier, id: Date.now() }];
+    setSuppliers(updated);
+    lsSet("bytem_suppliers", updated);
     setNewSupplier({ name: "", email: "", product: "", price: "" });
     setShowAddForm(false);
+    saveWithDelay(setSupplierSaved);
   }
 
-  function saveWithDelay(setter) {
-    setter(true);
-    setTimeout(() => setter(false), 2000);
+  function removeSupplier(id) {
+    const updated = suppliers.filter(s => s.id !== id);
+    setSuppliers(updated);
+    lsSet("bytem_suppliers", updated);
   }
 
   const tabs = ["profile", "connections", "suppliers", "spend rules"];
@@ -161,7 +209,6 @@ export default function Connections() {
       `}</style>
 
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "0 24px" }}>
-
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 0 18px", borderBottom: "1px solid #ebebeb" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -193,8 +240,8 @@ export default function Connections() {
               </div>
               <div style={{ padding: "16px 22px" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 4 }}>
-                  <Input label="Your name" placeholder="Jack Davis" value={yourName} onChange={setYourName} hint="Appears as the sender in supplier emails" />
-                  <Input label="Company name" placeholder="BYTE'M Brownies" value={companyName} onChange={setCompanyName} hint="Used in email signatures and order requests" />
+                  <Input label="Your name" placeholder="Jack Davis" value={yourName} onChange={setYourName} hint="Appears as sender in supplier emails" />
+                  <Input label="Company name" placeholder="BYTE'M Brownies" value={companyName} onChange={setCompanyName} hint="Used in email signatures" />
                 </div>
                 {yourName && (
                   <div style={{ padding: "10px 14px", background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}`, borderRadius: 8, marginBottom: 14 }}>
@@ -212,11 +259,9 @@ export default function Connections() {
         {/* CONNECTIONS TAB */}
         {activeTab === "connections" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: 32 }}>
-
-            {/* Email */}
             <Card>
               <CardHead icon="📧" title="Email — PO ingestion" description="Forward purchase orders here and the agent reads them automatically" connected={emailConnected}>
-                <Toggle on={emailConnected} onChange={setEmailConnected} />
+                <Toggle on={emailConnected} onChange={v => { setEmailConnected(v); lsSet("bytem_emailConnected", v); }} />
               </CardHead>
               {emailConnected && (
                 <div style={{ padding: "16px 22px" }}>
@@ -227,45 +272,29 @@ export default function Connections() {
                   </div>
                   <Input label="Or forward from your email" placeholder="orders@bytem.com" value={emailAddress} onChange={setEmailAddress} hint="We'll set up auto-forwarding rules for you" />
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <SaveBtn onClick={() => saveWithDelay(setEmailSaved)} saved={emailSaved} />
+                    <SaveBtn onClick={saveEmail} saved={emailSaved} />
                   </div>
                 </div>
               )}
             </Card>
 
-            {/* Slack */}
             <Card>
               <CardHead icon="💬" title="Slack — approval notifications" description="Get notified when payments need approval or agents are blocked" connected={slackConnected}>
-                <Toggle on={slackConnected} onChange={setSlackConnected} />
+                <Toggle on={slackConnected} onChange={v => { setSlackConnected(v); lsSet("bytem_slackConnected", v); }} />
               </CardHead>
               {slackConnected && (
                 <div style={{ padding: "16px 22px" }}>
                   <Input label="Slack webhook URL" placeholder="https://hooks.slack.com/services/..." value={slackWebhook} onChange={setSlackWebhook} hint="Create a webhook in your Slack workspace settings" />
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Notify me when</div>
-                    {[
-                      "Payment needs approval",
-                      "Payment blocked by spend rule",
-                      "New PO received",
-                      "Supplier email sent",
-                    ].map((item, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #f5f5f5" }}>
-                        <span style={{ fontSize: 12, color: "#555" }}>{item}</span>
-                        <Toggle on={true} onChange={() => {}} />
-                      </div>
-                    ))}
-                  </div>
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <SaveBtn onClick={() => saveWithDelay(setSlackSaved)} saved={slackSaved} />
+                    <SaveBtn onClick={saveSlack} saved={slackSaved} />
                   </div>
                 </div>
               )}
             </Card>
 
-            {/* Google Sheets */}
             <Card>
               <CardHead icon="📊" title="Google Sheets — inventory" description="Connect your inventory spreadsheet so the agent knows what you have on hand" connected={sheetsConnected}>
-                <Toggle on={sheetsConnected} onChange={setSheetsConnected} />
+                <Toggle on={sheetsConnected} onChange={v => { setSheetsConnected(v); lsSet("bytem_sheetsConnected", v); }} />
               </CardHead>
               {sheetsConnected && (
                 <div style={{ padding: "16px 22px" }}>
@@ -274,48 +303,40 @@ export default function Connections() {
                     <Input label="SKU column" placeholder="A" value={skuCol} onChange={setSkuCol} />
                     <Input label="Quantity on hand column" placeholder="B" value={qtyCol} onChange={setQtyCol} />
                   </div>
-                  <div style={{ padding: "10px 14px", background: "#f8f8f8", borderRadius: 8, marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, color: "#bbb" }}>Make sure the sheet is shared with <span style={{ color: DARK, fontFamily: "monospace" }}>agent@bytem.agentwallet.app</span> as a viewer</div>
-                  </div>
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <SaveBtn onClick={() => saveWithDelay(setSheetsSaved)} saved={sheetsSaved} />
+                    <SaveBtn onClick={saveSheets} saved={sheetsSaved} />
                   </div>
                 </div>
               )}
             </Card>
 
-            {/* Kaizntree */}
             <Card>
               <CardHead icon="🌴" title="Kaizntree — inventory & ops" description="Pull live inventory and production data directly from Kaizntree" connected={kaizntreeConnected}>
-                <Toggle on={kaizntreeConnected} onChange={setKaizntreeConnected} />
+                <Toggle on={kaizntreeConnected} onChange={v => { setKaizntreeConnected(v); lsSet("bytem_kaizntreeConnected", v); }} />
               </CardHead>
               {kaizntreeConnected && (
                 <div style={{ padding: "16px 22px" }}>
                   <Input label="Kaizntree API key" placeholder="kz_live_..." value={kaizntreeKey} onChange={setKaizntreeKey} type="password" hint="Find this in Kaizntree → Settings → API" />
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <SaveBtn onClick={() => saveWithDelay(setKaizntreeSaved)} saved={kaizntreeSaved} />
+                    <SaveBtn onClick={saveKaizntree} saved={kaizntreeSaved} />
                   </div>
                 </div>
               )}
             </Card>
 
-            {/* Stripe */}
             <Card>
               <CardHead icon="💳" title="Stripe — payment execution" description="Connect Stripe to execute governed supplier payments automatically" connected={stripeConnected}>
-                <Toggle on={stripeConnected} onChange={setStripeConnected} />
+                <Toggle on={stripeConnected} onChange={v => { setStripeConnected(v); lsSet("bytem_stripeConnected", v); }} />
               </CardHead>
               {stripeConnected && (
                 <div style={{ padding: "16px 22px" }}>
-                  <div style={{ padding: "12px 14px", background: "#f8f8f8", borderRadius: 8, marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ padding: "12px 14px", background: "#f8f8f8", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>Connect with Stripe</div>
                       <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>Securely link your Stripe account via OAuth</div>
                     </div>
-                    <button style={{ padding: "8px 16px", background: "#635bff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer" }}>
-                      Connect Stripe →
-                    </button>
+                    <button style={{ padding: "8px 16px", background: "#635bff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, color: "#fff", cursor: "pointer" }}>Connect Stripe →</button>
                   </div>
-                  <div style={{ fontSize: 11, color: "#ccc" }}>Payments only execute after passing your spend rules. Nothing moves without governance.</div>
                 </div>
               )}
             </Card>
@@ -331,9 +352,12 @@ export default function Connections() {
                   <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>Supplier directory</div>
                   <div style={{ fontSize: 12, color: "#bbb", marginTop: 2 }}>The agent uses this to draft and send supplier orders</div>
                 </div>
-                <button onClick={() => setShowAddForm(!showAddForm)} style={{ padding: "8px 16px", background: ACCENT, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, color: DARK, cursor: "pointer" }}>
-                  + add supplier
-                </button>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {supplierSaved && <span style={{ fontSize: 11, color: "#0a7a9a" }}>✓ saved</span>}
+                  <button onClick={() => setShowAddForm(!showAddForm)} style={{ padding: "8px 16px", background: ACCENT, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, color: DARK, cursor: "pointer" }}>
+                    + add supplier
+                  </button>
+                </div>
               </div>
 
               {showAddForm && (
@@ -342,7 +366,7 @@ export default function Connections() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <Input label="Company name" placeholder="Hershey's" value={newSupplier.name} onChange={v => setNewSupplier(p => ({ ...p, name: v }))} />
                     <Input label="Email" placeholder="orders@supplier.com" value={newSupplier.email} onChange={v => setNewSupplier(p => ({ ...p, email: v }))} />
-                    <Input label="Product / ingredient" placeholder="Dark chocolate chips" value={newSupplier.product} onChange={v => setNewSupplier(p => ({ ...p, product: v }))} />
+                    <Input label="Product / ingredient" placeholder="Chocolate chips" value={newSupplier.product} onChange={v => setNewSupplier(p => ({ ...p, product: v }))} />
                     <Input label="Typical price per unit" placeholder="4.20" value={newSupplier.price} onChange={v => setNewSupplier(p => ({ ...p, price: v }))} />
                   </div>
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
@@ -354,7 +378,7 @@ export default function Connections() {
 
               <div style={{ padding: "0 22px" }}>
                 {suppliers.map(s => (
-                  <SupplierRow key={s.id} supplier={s} onRemove={() => setSuppliers(prev => prev.filter(x => x.id !== s.id))} />
+                  <SupplierRow key={s.id} supplier={s} onRemove={() => removeSupplier(s.id)} />
                 ))}
                 {suppliers.length === 0 && (
                   <div style={{ padding: "24px 0", textAlign: "center", color: "#ccc", fontSize: 13 }}>No suppliers yet — add one above</div>
@@ -378,7 +402,6 @@ export default function Connections() {
                   <Input label="Max per supplier / month ($)" placeholder="25000" value={maxMonthly} onChange={setMaxMonthly} hint="Resets on the 1st of each month" />
                 </div>
                 <Input label="Require approval above ($)" placeholder="5000" value={approvalThreshold} onChange={setApprovalThreshold} hint="You'll get a Slack ping and have to approve manually" />
-
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "#f8f8f8", borderRadius: 8, marginBottom: 16 }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>Auto-approve under threshold</div>
@@ -386,35 +409,9 @@ export default function Connections() {
                   </div>
                   <Toggle on={autoApprove} onChange={setAutoApprove} />
                 </div>
-
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <SaveBtn onClick={() => saveWithDelay(setRulesSaved)} saved={rulesSaved} />
+                  <SaveBtn onClick={saveRules} saved={rulesSaved} />
                 </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div style={{ padding: "18px 22px", borderBottom: "1px solid #f5f5f5" }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>Audit log</div>
-                <div style={{ fontSize: 12, color: "#bbb", marginTop: 2 }}>Every agent action is logged here</div>
-              </div>
-              <div style={{ padding: "0 22px" }}>
-                {[
-                  { action: "Payment executed", detail: "$4,200 to Hershey's", time: "2m ago", type: "approved" },
-                  { action: "Payment queued", detail: "$8,500 to ePac — awaiting approval", time: "2m ago", type: "pending" },
-                  { action: "Payment blocked", detail: "$15,000 to Boston Baking — over limit", time: "2m ago", type: "blocked" },
-                  { action: "Supplier email sent", detail: "Hershey's — 1,470 lbs chocolate chips", time: "3m ago", type: "approved" },
-                  { action: "PO parsed", detail: "HG-2026-4471 from HomeGoods — 960 cases", time: "5m ago", type: "approved" },
-                ].map((log, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
-                    <div style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: log.type === "approved" ? ACCENT : log.type === "pending" ? "#f59e0b" : "#ff4d4d" }} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: DARK }}>{log.action}</div>
-                      <div style={{ fontSize: 11, color: "#bbb" }}>{log.detail}</div>
-                    </div>
-                    <div style={{ fontSize: 10, color: "#ccc" }}>{log.time}</div>
-                  </div>
-                ))}
               </div>
             </Card>
           </div>

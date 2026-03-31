@@ -5,17 +5,25 @@ const ACCENT_BG = "#f0fcff";
 const ACCENT_BORDER = "#c8f4fd";
 const DARK = "#1a1a1a";
 
-const defaultInventory = {
-  "BTM-CHOC-2PK": { cases_on_hand: 120 },
-  "BTM-BLND-2PK": { cases_on_hand: 60 },
-  "BTM-RB-2PK": { cases_on_hand: 45 },
-};
-
 const defaultSuppliers = [
   { name: "Hershey's", email: "orders@hersheys.com", product: "Chocolate chips", price: "4.20" },
   { name: "ePac", email: "orders@epacflexibles.com", product: "Packaging bags", price: "0.45" },
   { name: "Boston Baking", email: "production@bostonbaking.com", product: "Co-packing", price: "2.10" },
 ];
+
+function getSuppliers() {
+  try {
+    const saved = localStorage.getItem("bytem_suppliers");
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return defaultSuppliers;
+}
+
+const defaultInventory = {
+  "BTM-CHOC-2PK": { cases_on_hand: 0 },
+  "BTM-BLND-2PK": { cases_on_hand: 0 },
+  "BTM-RB-2PK": { cases_on_hand: 0 },
+};
 
 function PayIcon({ status }) {
   const cfg = {
@@ -89,13 +97,14 @@ export default function Dashboard() {
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState(null);
   const [yourName] = useState(() => {
-    try { return localStorage.getItem('bytem_yourName') || 'Jack'; } catch { return 'Jack'; }
+    try { return localStorage.getItem("bytem_yourName") || "Jack"; } catch { return "Jack"; }
   });
 
   const [parsedPO, setParsedPO] = useState(null);
   const [inventoryReport, setInventoryReport] = useState(null);
   const [draftedEmails, setDraftedEmails] = useState([]);
   const [sentEmails, setSentEmails] = useState([]);
+  const [sendingEmails, setSendingEmails] = useState([]);
   const [totalVol, setTotalVol] = useState(128400);
 
   useEffect(() => {
@@ -114,7 +123,6 @@ export default function Dashboard() {
     setDraftedEmails([]);
 
     try {
-      // Step 1: Parse PO
       setLoadingStep("Reading PO email...");
       const poRes = await fetch("/api/parse-po", {
         method: "POST",
@@ -125,7 +133,6 @@ export default function Dashboard() {
       if (!poData.success) throw new Error(poData.error);
       setParsedPO(poData.data);
 
-      // Step 2: Check inventory
       setLoadingStep("Checking inventory...");
       const invRes = await fetch("/api/check-inventory", {
         method: "POST",
@@ -136,15 +143,15 @@ export default function Dashboard() {
       if (!invData.success) throw new Error(invData.error);
       setInventoryReport(invData.data);
 
-      // Step 3: Draft emails
       setLoadingStep("Drafting supplier emails...");
+      const suppliers = getSuppliers();
       const emailRes = await fetch("/api/draft-emails", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           inventoryReport: invData.data,
-          suppliers: defaultSuppliers,
-          brandName: "BYTE'M Brownies",
+          suppliers,
+          brandName: localStorage.getItem("bytem_companyName") || "BYTE'M Brownies",
           yourName,
         }),
       });
@@ -162,6 +169,33 @@ export default function Dashboard() {
     }
   }
 
+  async function handleSend(email) {
+    setSendingEmails(prev => [...prev, email.to]);
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: email.email,
+          toName: email.to,
+          subject: email.subject,
+          body: email.body,
+          fromName: yourName,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSentEmails(prev => [...prev, email.to]);
+      } else {
+        alert("Send failed: " + data.error);
+      }
+    } catch (err) {
+      alert("Send failed: " + err.message);
+    } finally {
+      setSendingEmails(prev => prev.filter(n => n !== email.to));
+    }
+  }
+
   const hasData = parsedPO && inventoryReport;
   const totalCasesToProduce = inventoryReport?.total_cases_to_produce || 0;
 
@@ -170,7 +204,6 @@ export default function Dashboard() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap');
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        @keyframes slideIn { from{transform:translateY(-12px);opacity:0} to{transform:translateY(0);opacity:1} }
         @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .send-btn:hover { opacity: 0.85; }
@@ -178,7 +211,6 @@ export default function Dashboard() {
       `}</style>
 
       <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 24px" }}>
-
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 0 18px", borderBottom: "1px solid #ebebeb" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -233,7 +265,7 @@ export default function Dashboard() {
                   <textarea
                     value={poText}
                     onChange={e => setPoText(e.target.value)}
-                    placeholder={`Paste your full PO email here...\n\nExample:\nFrom: purchasing@homegoods.com\nSubject: Purchase Order #HG-2026-4471\n\nPO Number: HG-2026-4471\nDelivery: April 15, 2026\n\nBTM-CHOC-2PK | Chocolate Brownie 2-Pack | 480 cases\nBTM-BLND-2PK | Blonde Brownie 2-Pack | 240 cases`}
+                    placeholder={`Paste your full PO email here...`}
                     style={{ width: "100%", height: 160, padding: "12px 14px", border: "1px solid #ebebeb", borderRadius: 9, fontSize: 12, fontFamily: "'DM Mono', monospace", color: DARK, background: "#fafafa", resize: "vertical", lineHeight: 1.6 }}
                   />
                   {error && <div style={{ marginTop: 8, fontSize: 12, color: "#c0392b" }}>Error: {error}</div>}
@@ -254,10 +286,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Main content — only shows after PO is processed */}
+        {/* Main content */}
         {hasData && (
           <>
-            {/* Row 1 */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div style={cardStyle}>
                 <div style={cardHeadStyle}>
@@ -290,7 +321,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Row 2 */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
               <div style={cardStyle}>
                 <div style={cardHeadStyle}>
@@ -308,12 +338,13 @@ export default function Dashboard() {
                       </div>
                       <div style={{ fontSize: 12, color: "#999", marginBottom: 4 }}>{email.subject}</div>
                       <div style={{ fontSize: 11, color: "#ccc", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                        {email.body?.split('\n').slice(1).join(' ').trim()}
+                        {email.body?.split("\n").slice(1).join(" ").trim()}
                       </div>
-                      <button className="send-btn"
-                        onClick={() => setSentEmails(prev => [...prev, email.to])}
-                        style={{ marginTop: 8, fontSize: 11, fontWeight: 500, color: sentEmails.includes(email.to) ? "#0a7a9a" : DARK, background: sentEmails.includes(email.to) ? ACCENT_BG : ACCENT, border: `1px solid ${sentEmails.includes(email.to) ? ACCENT_BORDER : ACCENT}`, padding: "4px 12px", borderRadius: 6, cursor: "pointer", transition: "opacity 0.2s" }}>
-                        {sentEmails.includes(email.to) ? "✓ sent" : "approve + send"}
+                      <button
+                        className="send-btn"
+                        onClick={() => !sentEmails.includes(email.to) && !sendingEmails.includes(email.to) && handleSend(email)}
+                        style={{ marginTop: 8, fontSize: 11, fontWeight: 500, color: sentEmails.includes(email.to) ? "#0a7a9a" : DARK, background: sentEmails.includes(email.to) ? ACCENT_BG : ACCENT, border: `1px solid ${sentEmails.includes(email.to) ? ACCENT_BORDER : ACCENT}`, padding: "4px 12px", borderRadius: 6, cursor: sentEmails.includes(email.to) ? "default" : "pointer", transition: "opacity 0.2s" }}>
+                        {sentEmails.includes(email.to) ? "✓ sent" : sendingEmails.includes(email.to) ? "sending..." : "approve + send"}
                       </button>
                     </div>
                   ))}
@@ -348,7 +379,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* New PO button */}
             <button onClick={() => { setParsedPO(null); setInventoryReport(null); setDraftedEmails([]); setSentEmails([]); setShowPOInput(true); }}
               style={{ width: "100%", padding: 14, background: ACCENT, border: "none", borderRadius: 10, fontFamily: "'Syne', sans-serif", fontSize: 14, fontWeight: 800, color: DARK, cursor: "pointer" }}>
               + process another PO
