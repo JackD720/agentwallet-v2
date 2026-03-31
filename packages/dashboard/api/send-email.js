@@ -5,12 +5,10 @@ export default async function handler(req, res) {
   if (!to || !subject || !body) return res.status(400).json({ error: "Missing required fields" });
 
   const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-  const FROM_EMAIL = process.env.FROM_EMAIL || "ops@bytem.co";
+  const FROM_EMAIL = process.env.FROM_EMAIL || "jack@browniibytes.com";
 
   if (!SENDGRID_API_KEY) {
-    // Demo mode - simulate send
-    console.log(`[DEMO] Would send email to ${to}: ${subject}`);
-    return res.status(200).json({ success: true, demo: true, message: "Demo mode — add SENDGRID_API_KEY to send real emails" });
+    return res.status(200).json({ success: true, demo: true });
   }
 
   try {
@@ -28,13 +26,17 @@ export default async function handler(req, res) {
       }),
     });
 
+    const responseText = await response.text();
+    console.log("SendGrid status:", response.status);
+    console.log("SendGrid response:", responseText);
+
     if (response.ok) {
       res.status(200).json({ success: true });
     } else {
-      const err = await response.text();
-      res.status(500).json({ error: "SendGrid error", details: err });
+      res.status(500).json({ error: "SendGrid error", details: responseText });
     }
   } catch (err) {
+    console.log("Send error:", err.message);
     res.status(500).json({ error: "Send failed", details: err.message });
   }
 }
