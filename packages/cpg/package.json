@@ -1,0 +1,17 @@
+{
+  "name": "cpg",
+  "version": "1.0.0",
+  "description": "",
+  "main": "inventory-connector.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo 'no build needed'"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0"
+  }
+}

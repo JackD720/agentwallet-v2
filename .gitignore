@@ -47,3 +47,5 @@ prisma/migrations/*.sql.backup
 # Misc
 *.tgz
 .cache/
+.vercel
+.env*.local

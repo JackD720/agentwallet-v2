@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "agentwallet-gov"
+version = "1.0.0"
+description = "Governance infrastructure for AI agents — spend controls, kill switches, and audit trails for LangChain, CrewAI, and AutoGen"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Jack Davis", email = "jack@bytem.co"}]
+keywords = ["ai-agents", "governance", "langchain", "crewai", "autogen", "spend-controls"]
+dependencies = ["requests>=2.28.0"]
+
+[project.optional-dependencies]
+langchain = ["langchain>=0.1.0"]
+crewai = ["crewai>=0.1.0"]
+autogen = ["pyautogen>=0.2.0"]
