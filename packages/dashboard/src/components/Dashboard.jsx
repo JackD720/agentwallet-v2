@@ -12,8 +12,8 @@ const defaultInventory = {
 };
 
 const defaultSuppliers = [
-  { name: "Barry Callebaut", email: "orders@barry-callebaut.com", product: "Chocolate chips", price: "4.20" },
-  { name: "Noissue", email: "orders@noissue.co", product: "Packaging bags", price: "0.45" },
+  { name: "Hershey's", email: "orders@hersheys.com", product: "Chocolate chips", price: "4.20" },
+  { name: "ePac", email: "orders@epacflexibles.com", product: "Packaging bags", price: "0.45" },
   { name: "Boston Baking", email: "production@bostonbaking.com", product: "Co-packing", price: "2.10" },
 ];
 
@@ -88,6 +88,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState(null);
+  const [yourName] = useState(() => {
+    try { return localStorage.getItem('bytem_yourName') || 'Jack'; } catch { return 'Jack'; }
+  });
 
   const [parsedPO, setParsedPO] = useState(null);
   const [inventoryReport, setInventoryReport] = useState(null);
@@ -142,6 +145,7 @@ export default function Dashboard() {
           inventoryReport: invData.data,
           suppliers: defaultSuppliers,
           brandName: "BYTE'M Brownies",
+          yourName,
         }),
       });
       const emailData = await emailRes.json();

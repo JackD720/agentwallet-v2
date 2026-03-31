@@ -5,7 +5,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { inventoryReport, suppliers, brandName } = req.body;
+  const { inventoryReport, suppliers, brandName, yourName } = req.body;
   if (!inventoryReport || !suppliers) return res.status(400).json({ error: "Missing data" });
 
   try {
@@ -23,8 +23,11 @@ Supplier: ${supplier.name} (${supplier.email})
 Product: ${supplier.product}
 Order needed for: ${totalCases} production cases
 Typical price: $${supplier.price}/unit
+Sender name: ${yourName || "Jack"}
+Company: ${brandName || "BYTE'M Brownies"}
 
 Requirements:
+- Sign the email with the sender name above (not [Your Name])
 - Ask for best bulk pricing given order size
 - Request lead time confirmation  
 - Mention growing brand with repeat order potential

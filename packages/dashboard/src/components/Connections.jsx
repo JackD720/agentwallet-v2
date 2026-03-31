@@ -91,6 +91,16 @@ function SupplierRow({ supplier, onRemove }) {
 export default function Connections() {
   const [activeTab, setActiveTab] = useState("connections");
 
+  // Profile
+  const [yourName, setYourName] = useState(() => { try { return localStorage.getItem('bytem_yourName') || ''; } catch { return ''; } });
+  const [companyName, setCompanyName] = useState(() => { try { return localStorage.getItem('bytem_companyName') || ''; } catch { return ''; } });
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  function saveProfile() {
+    try { localStorage.setItem('bytem_yourName', yourName); localStorage.setItem('bytem_companyName', companyName); } catch {}
+    saveWithDelay(setProfileSaved);
+  }
+
   // Email
   const [emailConnected, setEmailConnected] = useState(false);
   const [emailAddress, setEmailAddress] = useState("");
@@ -119,8 +129,8 @@ export default function Connections() {
 
   // Suppliers
   const [suppliers, setSuppliers] = useState([
-    { id: 1, name: "Barry Callebaut", email: "orders@barry-callebaut.com", product: "Chocolate chips", price: "4.20" },
-    { id: 2, name: "Noissue", email: "orders@noissue.co", product: "Packaging bags", price: "0.45" },
+    { id: 1, name: "Hershey's", email: "orders@hersheys.com", product: "Chocolate chips", price: "4.20" },
+    { id: 2, name: "ePac", email: "orders@epacflexibles.com", product: "Packaging bags", price: "0.45" },
     { id: 3, name: "Boston Baking", email: "production@bostonbaking.com", product: "Co-packing", price: "2.10" },
   ]);
   const [newSupplier, setNewSupplier] = useState({ name: "", email: "", product: "", price: "" });
@@ -138,7 +148,7 @@ export default function Connections() {
     setTimeout(() => setter(false), 2000);
   }
 
-  const tabs = ["connections", "suppliers", "spend rules"];
+  const tabs = ["profile", "connections", "suppliers", "spend rules"];
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f8f6", fontFamily: "'DM Mono', 'Fira Code', monospace", color: DARK }}>
@@ -172,6 +182,32 @@ export default function Connections() {
             </button>
           ))}
         </div>
+
+        {/* PROFILE TAB */}
+        {activeTab === "profile" && (
+          <div style={{ paddingBottom: 32 }}>
+            <Card>
+              <div style={{ padding: "18px 22px", borderBottom: "1px solid #f5f5f5" }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>Your profile</div>
+                <div style={{ fontSize: 12, color: "#bbb", marginTop: 2 }}>Used to sign supplier emails and personalize agent actions</div>
+              </div>
+              <div style={{ padding: "16px 22px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 4 }}>
+                  <Input label="Your name" placeholder="Jack Davis" value={yourName} onChange={setYourName} hint="Appears as the sender in supplier emails" />
+                  <Input label="Company name" placeholder="BYTE'M Brownies" value={companyName} onChange={setCompanyName} hint="Used in email signatures and order requests" />
+                </div>
+                {yourName && (
+                  <div style={{ padding: "10px 14px", background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}`, borderRadius: 8, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, color: "#0a7a9a" }}>Emails will be signed: <strong>{yourName}{companyName ? `, ${companyName}` : ""}</strong></div>
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <SaveBtn onClick={saveProfile} saved={profileSaved} />
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* CONNECTIONS TAB */}
         {activeTab === "connections" && (
@@ -304,7 +340,7 @@ export default function Connections() {
                 <div style={{ padding: "16px 22px", background: ACCENT_BG, borderBottom: "1px solid #ebebeb" }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#0a7a9a", marginBottom: 12 }}>New supplier</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    <Input label="Company name" placeholder="Barry Callebaut" value={newSupplier.name} onChange={v => setNewSupplier(p => ({ ...p, name: v }))} />
+                    <Input label="Company name" placeholder="Hershey's" value={newSupplier.name} onChange={v => setNewSupplier(p => ({ ...p, name: v }))} />
                     <Input label="Email" placeholder="orders@supplier.com" value={newSupplier.email} onChange={v => setNewSupplier(p => ({ ...p, email: v }))} />
                     <Input label="Product / ingredient" placeholder="Dark chocolate chips" value={newSupplier.product} onChange={v => setNewSupplier(p => ({ ...p, product: v }))} />
                     <Input label="Typical price per unit" placeholder="4.20" value={newSupplier.price} onChange={v => setNewSupplier(p => ({ ...p, price: v }))} />
@@ -364,10 +400,10 @@ export default function Connections() {
               </div>
               <div style={{ padding: "0 22px" }}>
                 {[
-                  { action: "Payment executed", detail: "$4,200 to Barry Callebaut", time: "2m ago", type: "approved" },
-                  { action: "Payment queued", detail: "$8,500 to Noissue — awaiting approval", time: "2m ago", type: "pending" },
+                  { action: "Payment executed", detail: "$4,200 to Hershey's", time: "2m ago", type: "approved" },
+                  { action: "Payment queued", detail: "$8,500 to ePac — awaiting approval", time: "2m ago", type: "pending" },
                   { action: "Payment blocked", detail: "$15,000 to Boston Baking — over limit", time: "2m ago", type: "blocked" },
-                  { action: "Supplier email sent", detail: "Barry Callebaut — 1,470 lbs chocolate chips", time: "3m ago", type: "approved" },
+                  { action: "Supplier email sent", detail: "Hershey's — 1,470 lbs chocolate chips", time: "3m ago", type: "approved" },
                   { action: "PO parsed", detail: "HG-2026-4471 from HomeGoods — 960 cases", time: "5m ago", type: "approved" },
                 ].map((log, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
