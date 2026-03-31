@@ -1,5 +1,9 @@
 {
   "buildCommand": "npm run build --workspace=packages/dashboard",
   "outputDirectory": "packages/dashboard/dist",
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/$1" }]
+  "functions": {
+    "packages/dashboard/api/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  }
 }
