@@ -11,7 +11,7 @@ export default async function handler(req, res) {
 
   // User denied access
   if (error) {
-    return res.redirect(`${BASE_URL}/#settings?gmail=denied`);
+    return res.redirect(`${BASE_URL}/?gmail=denied#settings`);
   }
 
   if (!code || !userEmail) {
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     const tokens = await tokenRes.json();
     if (!tokens.access_token) {
       console.error("Token exchange failed:", tokens);
-      return res.redirect(`${BASE_URL}/#settings?gmail=error`);
+      return res.redirect(`${BASE_URL}/?gmail=error#settings`);
     }
 
     // 2. Get their Gmail address
@@ -74,11 +74,12 @@ export default async function handler(req, res) {
 
     if (!saveRes.ok) {
       console.error("Supabase save failed:", await saveRes.text());
-      return res.redirect(`${BASE_URL}/#settings?gmail=error`);
+      return res.redirect(`${BASE_URL}/?gmail=error#settings`);
     }
 
     // 4. Redirect back to settings with success
-    return res.redirect(`${BASE_URL}/#settings?gmail=connected`);
+    // Use both hash and query so the Connections component can detect it
+    return res.redirect(`${BASE_URL}/?gmail=connected#settings`);
 
   } catch (err) {
     console.error("Gmail callback error:", err);

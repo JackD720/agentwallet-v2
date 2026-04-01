@@ -253,7 +253,20 @@ export default function Dashboard() {
         });
         const emailData = await emailRes.json();
         if (!emailData.success) throw new Error(emailData.error);
-        setDraftedEmails(emailData.data);
+        // Enrich drafted emails with ingredient data for thread tracking
+        const enriched = (emailData.data || []).map(email => {
+          const matchingItem = invData.data?.line_items?.find(item =>
+            email.to?.toLowerCase().includes(item.ingredient_name?.split(" ")[0]?.toLowerCase()) ||
+            item.ingredient_name?.toLowerCase().includes(email.qty?.split(" ")[0]?.toLowerCase())
+          );
+          return {
+            ...email,
+            ingredient: matchingItem?.ingredient_name || email.qty || "",
+            qty_lbs: matchingItem?.gap || 0,
+            cost_estimate: matchingItem?.cost_to_order || 0,
+          };
+        });
+        setDraftedEmails(enriched);
       } catch (innerErr) {
         // If inventory/email step fails, still show the parsed PO
         console.error("Inventory/email step:", innerErr);

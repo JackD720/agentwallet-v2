@@ -195,6 +195,26 @@ export default function Connections() {
   // -----------------------------------------------------------------------
   // One-time sync: when Supabase settings load, override local state
   // -----------------------------------------------------------------------
+  // Re-fetch settings from Supabase after Gmail OAuth redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gmailStatus = params.get("gmail");
+    if (gmailStatus === "connected" && userEmail) {
+      // Settings will reload via the main load effect — just mark gmail as connected optimistically
+      fetch(`/api/settings-get?email=${encodeURIComponent(userEmail)}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.settings?.gmail_connected) {
+            setGmailConnected(true);
+            setGmailEmail(data.settings.gmail_email || "");
+          }
+        })
+        .catch(() => {});
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname + window.location.hash);
+    }
+  }, [userEmail]);
+
   useEffect(() => {
     if (!settings || syncedRef.current) return;
     syncedRef.current = true;
@@ -411,7 +431,6 @@ export default function Connections() {
             {/* Gmail OAuth */}
             <Card>
               <CardHead icon="📧" title="Gmail — supplier reply tracking" description="Connect Gmail so the agent reads supplier replies and parses confirmations automatically" connected={gmailConnected}>
-                <StatusDot connected={gmailConnected} />
               </CardHead>
               <div style={{ padding: "16px 22px" }}>
                 {gmailConnected ? (
