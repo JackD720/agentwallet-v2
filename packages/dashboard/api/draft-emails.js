@@ -13,27 +13,35 @@ export default async function handler(req, res) {
     if (totalCases === 0) return res.status(200).json({ success: true, data: [] });
 
     const emailPromises = suppliers.slice(0, 3).map(async supplier => {
+      const relationshipContext = supplier.notes?.trim()
+        ? `Relationship notes: ${supplier.notes}`
+        : "No prior relationship noted — treat as first contact but keep it warm.";
+
       const message = await client.messages.create({
         model: "claude-opus-4-6",
-        max_tokens: 600,
+        max_tokens: 400,
         messages: [{
           role: "user",
-          content: `Draft a professional supplier email for ${brandName || "our CPG brand"}.
-Supplier: ${supplier.name} (${supplier.email})
+          content: `Write a SHORT supplier email. Sound like a real founder texting a vendor, not a corporate letter.
+
+Sender: ${yourName || "Jack"}, ${brandName || "BYTE'M"}
+Supplier: ${supplier.name}
 Product: ${supplier.product}
-Order needed for: ${totalCases} production cases
-Typical price: $${supplier.price}/unit
-Sender name: ${yourName || "Jack"}
-Company: ${brandName || "BYTE'M Brownies"}
+Quantity: ${totalCases} production cases
+Typical unit price: $${supplier.price}
+${relationshipContext}
 
-Requirements:
-- Sign the email with the sender name above (not [Your Name])
-- Ask for best bulk pricing given order size
-- Request lead time confirmation  
-- Mention growing brand with repeat order potential
-- Professional but friendly tone
+Rules — follow these exactly:
+- NEVER start with "I hope this message finds you well" or any filler
+- NEVER say "I wanted to reach out" or "I am writing to"
+- Open directly with the point or a brief personal line if you have history
+- Body: 3 sentences MAX
+- If there's relationship history, reference it naturally in one line
+- Ask for pricing + lead time in one sentence
+- Close warmly but briefly
+- Sign: "${yourName || "Jack"}\n${brandName || "BYTE'M"}"
 
-Return ONLY the email starting with Subject: line. No explanation.`
+Return ONLY the email starting with "Subject:" — nothing else.`
         }]
       });
 

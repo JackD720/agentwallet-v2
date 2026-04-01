@@ -72,24 +72,27 @@ function SaveBtn({ onClick, saved }) {
 
 function SupplierRow({ supplier, onRemove }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f5f5f5" }}>
-      <div style={{ width: 32, height: 32, borderRadius: "50%", background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#0a7a9a", flexShrink: 0 }}>
-        {supplier.name[0]}
+    <div style={{ padding: "12px 0", borderBottom: "1px solid #f5f5f5" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#0a7a9a", flexShrink: 0 }}>
+          {supplier.name[0]}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{supplier.name}</div>
+          <div style={{ fontSize: 11, color: "#bbb" }}>{supplier.email} · {supplier.product}</div>
+          {supplier.notes && <div style={{ fontSize: 11, color: "#aaa", marginTop: 2, fontStyle: "italic" }}>"{supplier.notes}"</div>}
+        </div>
+        <div style={{ fontSize: 12, color: "#bbb" }}>${supplier.price}/unit</div>
+        <button onClick={onRemove} style={{ fontSize: 11, color: "#ff4d4d", background: "#fff0f0", border: "1px solid #ffd5d5", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>remove</button>
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{supplier.name}</div>
-        <div style={{ fontSize: 11, color: "#bbb" }}>{supplier.email} · {supplier.product}</div>
-      </div>
-      <div style={{ fontSize: 12, color: "#bbb" }}>${supplier.price}/unit</div>
-      <button onClick={onRemove} style={{ fontSize: 11, color: "#ff4d4d", background: "#fff0f0", border: "1px solid #ffd5d5", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>remove</button>
     </div>
   );
 }
 
 const defaultSuppliers = [
-  { id: 1, name: "Hershey's", email: "orders@hersheys.com", product: "Chocolate chips", price: "4.20" },
-  { id: 2, name: "ePac", email: "orders@epacflexibles.com", product: "Packaging bags", price: "0.45" },
-  { id: 3, name: "Boston Baking", email: "production@bostonbaking.com", product: "Co-packing", price: "2.10" },
+  { id: 1, name: "Hershey's", email: "orders@hersheys.com", product: "Chocolate chips", price: "4.20", notes: "" },
+  { id: 2, name: "ePac", email: "orders@epacflexibles.com", product: "Packaging bags", price: "0.45", notes: "" },
+  { id: 3, name: "Boston Baking", email: "production@bostonbaking.com", product: "Co-packing", price: "2.10", notes: "" },
 ];
 
 export default function Connections() {
@@ -134,7 +137,7 @@ export default function Connections() {
 
   // Suppliers
   const [suppliers, setSuppliers] = useState(() => ls("bytem_suppliers", defaultSuppliers));
-  const [newSupplier, setNewSupplier] = useState({ name: "", email: "", product: "", price: "" });
+  const [newSupplier, setNewSupplier] = useState({ name: "", email: "", product: "", price: "", notes: "" });
   const [showAddForm, setShowAddForm] = useState(false);
   const [supplierSaved, setSupplierSaved] = useState(false);
 
@@ -461,6 +464,7 @@ export default function Connections() {
                     <Input label="Product / ingredient" placeholder="Chocolate chips" value={newSupplier.product} onChange={v => setNewSupplier(p => ({ ...p, product: v }))} />
                     <Input label="Typical price per unit" placeholder="4.20" value={newSupplier.price} onChange={v => setNewSupplier(p => ({ ...p, price: v }))} />
                   </div>
+                  <Input label="Relationship notes (optional)" placeholder="e.g. Ordered 3x before, good rep, ask for net 30" value={newSupplier.notes || ""} onChange={v => setNewSupplier(p => ({ ...p, notes: v }))} hint="The AI uses this to personalize the email tone" />
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
                     <button onClick={() => setShowAddForm(false)} style={{ padding: "7px 14px", background: "#fff", border: "1px solid #ebebeb", borderRadius: 7, fontSize: 12, cursor: "pointer", color: "#888" }}>cancel</button>
                     <button onClick={addSupplier} style={{ padding: "7px 14px", background: ACCENT, border: "none", borderRadius: 7, fontSize: 12, fontWeight: 600, color: DARK, cursor: "pointer" }}>add supplier</button>
