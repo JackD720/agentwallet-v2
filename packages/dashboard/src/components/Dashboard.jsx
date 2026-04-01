@@ -1,29 +1,14 @@
+// src/components/Dashboard.jsx
+// Session 2: reads settings from Supabase via SettingsContext instead of raw localStorage.
+// All localStorage.getItem() calls replaced with context getters.
+
 import { useState, useEffect } from "react";
+import { useSettings } from "../context/SettingsContext";
 
 const ACCENT = "#59E2FD";
 const ACCENT_BG = "#f0fcff";
 const ACCENT_BORDER = "#c8f4fd";
 const DARK = "#1a1a1a";
-
-const defaultSuppliers = [
-  { name: "Hershey's", email: "orders@hersheys.com", product: "Chocolate chips", price: "4.20" },
-  { name: "ePac", email: "orders@epacflexibles.com", product: "Packaging bags", price: "0.45" },
-  { name: "Boston Baking", email: "production@bostonbaking.com", product: "Co-packing", price: "2.10" },
-];
-
-function getSuppliers() {
-  try {
-    const saved = localStorage.getItem("bytem_suppliers");
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  return defaultSuppliers;
-}
-
-const defaultInventory = {
-  "BTM-CHOC-2PK": { cases_on_hand: 0 },
-  "BTM-BLND-2PK": { cases_on_hand: 0 },
-  "BTM-RB-2PK": { cases_on_hand: 0 },
-};
 
 function PayIcon({ status }) {
   const cfg = {
@@ -54,7 +39,6 @@ function StatusBadge({ status }) {
 }
 
 function InventoryBar({ item, mode }) {
-  // Ingredient mode
   if (mode === "ingredient") {
     const pct = item.needed > 0 ? Math.round((item.on_hand / item.needed) * 100) : 0;
     const barColor = item.status === "sufficient" ? "#2ecc71" : pct < 25 ? "#ff4d4d" : "#f59e0b";
@@ -85,7 +69,6 @@ function InventoryBar({ item, mode }) {
     );
   }
 
-  // Case mode (fallback)
   const pct = item.cases_ordered > 0 ? Math.round((item.cases_on_hand / item.cases_ordered) * 100) : 0;
   const barColor = pct < 25 ? "#ff4d4d" : ACCENT;
   return (
@@ -123,51 +106,46 @@ function Tag({ children, accent }) {
 }
 
 export default function Dashboard() {
+  // -----------------------------------------------------------------------
+  // Pull everything from Supabase context instead of raw localStorage
+  // -----------------------------------------------------------------------
+  const { settings, saveSettings, yourName, companyName, sheetsUrl, suppliers, recipes } = useSettings();
+
   const [showPOInput, setShowPOInput] = useState(false);
   const [poText, setPoText] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [error, setError] = useState(null);
-  const [yourName] = useState(() => {
-    try { return localStorage.getItem("bytem_yourName") || "Jack"; } catch { return "Jack"; }
-  });
 
   const [parsedPO, setParsedPO] = useState(null);
   const [inventoryReport, setInventoryReport] = useState(null);
   const [draftedEmails, setDraftedEmails] = useState([]);
   const [sentEmails, setSentEmails] = useState([]);
   const [sendingEmails, setSendingEmails] = useState([]);
-  const [confirmEmail, setConfirmEmail] = useState(null); // email pending confirmation
+  const [confirmEmail, setConfirmEmail] = useState(null);
   const [mismatches, setMismatches] = useState([]);
   const [totalVol, setTotalVol] = useState(128400);
 
   function detectMismatches(poItems) {
     const warnings = [];
     try {
-      const recipes = JSON.parse(localStorage.getItem("bytem_recipes") || "[]");
-      if (!recipes.length) return [];
+      if (!recipes?.length) return [];
 
       poItems.forEach(item => {
         const name = (item.product_name || "").toUpperCase();
-
-        // Extract oz from PO product name e.g. "10/4.7 OZ" or "6/4.23OZ"
         const ozMatch = name.match(/(\d+\.?\d*)\s*OZ/);
         const packMatch = name.match(/^(\d+)\//);
         const poOz = ozMatch ? parseFloat(ozMatch[1]) : null;
         const poPack = packMatch ? parseInt(packMatch[1]) : null;
 
-        // Find matching recipe by SKU or name
         const recipe = recipes.find(r =>
           name.includes(r.sku?.toUpperCase()) ||
-          name.includes(r.name?.toUpperCase().split(" ").slice(-1)[0]) // last word e.g. "CLASSIC"
+          name.includes(r.name?.toUpperCase().split(" ").slice(-1)[0])
         );
 
         if (recipe) {
           const settingsOz = parseFloat(recipe.unitSize) || null;
           const settingsPack = recipe.unitsPerCase || null;
-
-          // Only warn if BOTH oz and pack differ (real format change)
-          // or if oz differs by more than 0.5 (significant)
           const ozDiffers = poOz && settingsOz && Math.abs(poOz - settingsOz) > 0.5;
           const packDiffers = poPack && settingsPack && poPack !== settingsPack;
 
@@ -222,51 +200,58 @@ export default function Dashboard() {
       setParsedPO(poData.data);
       setMismatches(detectMismatches(poData.data.items || []));
 
-      // Fetch ingredient inventory from Google Sheets if connected
       setLoadingStep("Fetching ingredient inventory...");
       let ingredientInventory = {};
-      let recipes = [];
       try {
-        const sheetUrl = localStorage.getItem("bytem_sheetsUrl");
-        const savedRecipes = localStorage.getItem("bytem_recipes");
-        recipes = savedRecipes ? JSON.parse(savedRecipes) : [];
-        if (sheetUrl && sheetUrl.includes("docs.google.com")) {
+        // Use sheetsUrl from context (Supabase) instead of raw localStorage
+        const activeSheetUrl = sheetsUrl || settings?.sheets_url;
+        const activeRecipes = recipes?.length ? recipes : [];
+
+        if (activeSheetUrl && activeSheetUrl.includes("docs.google.com")) {
           const sheetRes = await fetch("/api/fetch-inventory", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sheetUrl }),
+            body: JSON.stringify({ sheetUrl: activeSheetUrl }),
           });
           const sheetData = await sheetRes.json();
           if (sheetData.success) ingredientInventory = sheetData.data;
         }
-      } catch {}
 
-      setLoadingStep("Calculating ingredient gaps...");
-      const invRes = await fetch("/api/check-inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parsedPO: poData.data, inventory: ingredientInventory, recipes }),
-      });
-      const invData = await invRes.json();
-      if (!invData.success) throw new Error(invData.error);
-      setInventoryReport(invData.data);
-      try { localStorage.setItem("bytem_lastPoCases", invData.data.total_cases_to_produce); } catch {}
+        setLoadingStep("Calculating ingredient gaps...");
+        const invRes = await fetch("/api/check-inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parsedPO: poData.data, inventory: ingredientInventory, recipes: activeRecipes }),
+        });
+        const invData = await invRes.json();
+        if (!invData.success) throw new Error(invData.error);
+        setInventoryReport(invData.data);
 
-      setLoadingStep("Drafting supplier emails...");
-      const suppliers = getSuppliers();
-      const emailRes = await fetch("/api/draft-emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inventoryReport: invData.data,
-          suppliers,
-          brandName: localStorage.getItem("bytem_companyName") || "BYTE'M Brownies",
-          yourName,
-        }),
-      });
-      const emailData = await emailRes.json();
-      if (!emailData.success) throw new Error(emailData.error);
-      setDraftedEmails(emailData.data);
+        // Persist lastPoCases to Supabase
+        if (invData.data.total_cases_to_produce) {
+          saveSettings({ last_po_cases: invData.data.total_cases_to_produce });
+        }
+
+        setLoadingStep("Drafting supplier emails...");
+        const activeSuppliers = suppliers?.length ? suppliers : [];
+        const emailRes = await fetch("/api/draft-emails", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inventoryReport: invData.data,
+            suppliers: activeSuppliers,
+            brandName: companyName || "BYTE'M Brownies",
+            yourName: yourName || "Jack",
+          }),
+        });
+        const emailData = await emailRes.json();
+        if (!emailData.success) throw new Error(emailData.error);
+        setDraftedEmails(emailData.data);
+      } catch (innerErr) {
+        // If inventory/email step fails, still show the parsed PO
+        console.error("Inventory/email step:", innerErr);
+        throw innerErr;
+      }
 
       setShowPOInput(false);
       setPoText("");
@@ -289,7 +274,7 @@ export default function Dashboard() {
           toName: email.to,
           subject: email.subject,
           body: email.body,
-          fromName: yourName,
+          fromName: yourName || "Jack",
         }),
       });
       const data = await res.json();
@@ -374,7 +359,7 @@ export default function Dashboard() {
                   <textarea
                     value={poText}
                     onChange={e => setPoText(e.target.value)}
-                    placeholder={`Paste your full PO email here...`}
+                    placeholder="Paste your full PO email here..."
                     style={{ width: "100%", height: 160, padding: "12px 14px", border: "1px solid #ebebeb", borderRadius: 9, fontSize: 12, fontFamily: "'DM Mono', monospace", color: DARK, background: "#fafafa", resize: "vertical", lineHeight: 1.6 }}
                   />
                   {error && <div style={{ marginTop: 8, fontSize: 12, color: "#c0392b" }}>Error: {error}</div>}
@@ -395,7 +380,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Mismatch warning banner */}
+        {/* Mismatch warning */}
         {hasData && mismatches.length > 0 && (
           <div style={{ marginBottom: 12, padding: "14px 18px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
             <div style={{ fontSize: 18, flexShrink: 0 }}>⚠️</div>
@@ -495,10 +480,11 @@ export default function Dashboard() {
                 <div style={cardHeadStyle}><CardLabel>Payment governance</CardLabel><Tag>AgentWallet</Tag></div>
                 <div style={{ padding: "0 18px" }}>
                   {inventoryReport.mode === "ingredient" ? (
-                    // Ingredient mode — show per-ingredient payments
                     inventoryReport.line_items.filter(i => i.gap > 0).map((item, i, arr) => {
                       const amount = item.cost_to_order;
-                      const status = amount > 10000 ? "blocked" : amount > 5000 ? "pending" : "approved";
+                      const threshold = parseFloat(settings?.approval_threshold) || 5000;
+                      const maxTxn = parseFloat(settings?.max_per_txn) || 10000;
+                      const status = amount > maxTxn ? "blocked" : amount > threshold ? "pending" : "approved";
                       return (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px solid #f5f5f5" : "none" }}>
                           <PayIcon status={status} />
@@ -514,7 +500,6 @@ export default function Dashboard() {
                       );
                     })
                   ) : (
-                    // Case mode fallback
                     inventoryReport.line_items.map((item, i) => {
                       const amount = item.cases_to_produce * 8;
                       const status = amount > 10000 ? "blocked" : amount > 5000 ? "pending" : "approved";
@@ -535,7 +520,9 @@ export default function Dashboard() {
                   )}
                   <div style={{ margin: "12px 0", padding: "10px 12px", background: "#f8f8f8", borderRadius: 8 }}>
                     <div style={{ fontSize: 10, color: "#ccc", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>Rules enforced</div>
-                    <div style={{ fontSize: 12, color: "#999" }}>Max $10K per transaction · $25K monthly per supplier · approval above $5K</div>
+                    <div style={{ fontSize: 12, color: "#999" }}>
+                      Max ${settings?.max_per_txn || "10,000"} per transaction · ${settings?.max_monthly || "25,000"} monthly per supplier · approval above ${settings?.approval_threshold || "5,000"}
+                    </div>
                   </div>
                 </div>
               </div>

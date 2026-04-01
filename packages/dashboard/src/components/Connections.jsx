@@ -1,15 +1,19 @@
-import { useState, useEffect } from "react";
+// src/components/Connections.jsx
+// Session 2: localStorage → Supabase via SettingsContext.
+// lsSet() calls replaced with saveSettings(). A one-time useEffect syncs
+// Supabase state into local component state when it first loads.
+
+import { useState, useEffect, useRef } from "react";
+import { useSettings } from "../context/SettingsContext";
 
 const ACCENT = "#59E2FD";
 const ACCENT_BG = "#f0fcff";
 const ACCENT_BORDER = "#c8f4fd";
 const DARK = "#1a1a1a";
 
+// Keep ls() as a fallback read for initial state before Supabase loads
 function ls(key, fallback) {
   try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
-}
-function lsSet(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
 function Toggle({ on, onChange }) {
@@ -62,10 +66,10 @@ function Input({ label, placeholder, value, onChange, type = "text", hint }) {
   );
 }
 
-function SaveBtn({ onClick, saved }) {
+function SaveBtn({ onClick, saved, saving }) {
   return (
-    <button onClick={onClick} style={{ padding: "8px 18px", background: saved ? ACCENT_BG : ACCENT, border: `1px solid ${saved ? ACCENT_BORDER : ACCENT}`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: saved ? "#0a7a9a" : DARK, cursor: "pointer", transition: "all 0.2s" }}>
-      {saved ? "✓ saved" : "save"}
+    <button onClick={onClick} style={{ padding: "8px 18px", background: saved ? ACCENT_BG : ACCENT, border: `1px solid ${saved ? ACCENT_BORDER : ACCENT}`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: saved ? "#0a7a9a" : DARK, cursor: "pointer", transition: "all 0.2s", opacity: saving ? 0.7 : 1 }}>
+      {saving ? "saving..." : saved ? "✓ saved" : "save"}
     </button>
   );
 }
@@ -96,6 +100,12 @@ const defaultSuppliers = [
 ];
 
 export default function Connections() {
+  // -----------------------------------------------------------------------
+  // Supabase context
+  // -----------------------------------------------------------------------
+  const { settings, saveSettings, saving } = useSettings();
+  const syncedRef = useRef(false); // only sync once on first load
+
   const [activeTab, setActiveTab] = useState("profile");
 
   // Profile
@@ -141,48 +151,6 @@ export default function Connections() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [supplierSaved, setSupplierSaved] = useState(false);
 
-  function saveWithDelay(setter) { setter(true); setTimeout(() => setter(false), 2000); }
-
-  function saveProfile() {
-    lsSet("bytem_yourName", yourName);
-    lsSet("bytem_companyName", companyName);
-    saveWithDelay(setProfileSaved);
-  }
-
-  function saveEmail() {
-    lsSet("bytem_emailConnected", emailConnected);
-    lsSet("bytem_emailAddress", emailAddress);
-    saveWithDelay(setEmailSaved);
-  }
-
-  function saveSlack() {
-    lsSet("bytem_slackConnected", slackConnected);
-    lsSet("bytem_slackWebhook", slackWebhook);
-    saveWithDelay(setSlackSaved);
-  }
-
-  function saveSheets() {
-    lsSet("bytem_sheetsConnected", sheetsConnected);
-    lsSet("bytem_sheetsUrl", sheetsUrl);
-    lsSet("bytem_skuCol", skuCol);
-    lsSet("bytem_qtyCol", qtyCol);
-    saveWithDelay(setSheetsSaved);
-  }
-
-  function saveKaizntree() {
-    lsSet("bytem_kaizntreeConnected", kaizntreeConnected);
-    lsSet("bytem_kaizntreeKey", kaizntreeKey);
-    saveWithDelay(setKaizntreeSaved);
-  }
-
-  function saveRules() {
-    lsSet("bytem_maxPerTxn", maxPerTxn);
-    lsSet("bytem_maxMonthly", maxMonthly);
-    lsSet("bytem_approvalThreshold", approvalThreshold);
-    lsSet("bytem_autoApprove", autoApprove);
-    saveWithDelay(setRulesSaved);
-  }
-
   // Recipes / BOM
   const defaultRecipes = [
     {
@@ -218,9 +186,85 @@ export default function Connections() {
   const [newIngredient, setNewIngredient] = useState({ name: "", qty: "", unit: "lbs" });
   const [showIngredientForm, setShowIngredientForm] = useState(false);
 
+  // -----------------------------------------------------------------------
+  // One-time sync: when Supabase settings load, override local state
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!settings || syncedRef.current) return;
+    syncedRef.current = true;
+
+    if (settings.your_name)        setYourName(settings.your_name);
+    if (settings.company_name)     setCompanyName(settings.company_name);
+    if (settings.email_connected !== undefined) setEmailConnected(settings.email_connected);
+    if (settings.email_address)    setEmailAddress(settings.email_address);
+    if (settings.slack_connected !== undefined) setSlackConnected(settings.slack_connected);
+    if (settings.slack_webhook)    setSlackWebhook(settings.slack_webhook);
+    if (settings.sheets_connected !== undefined) setSheetsConnected(settings.sheets_connected);
+    if (settings.sheets_url)       setSheetsUrl(settings.sheets_url);
+    if (settings.sku_col)          setSkuCol(settings.sku_col);
+    if (settings.qty_col)          setQtyCol(settings.qty_col);
+    if (settings.kaizntree_connected !== undefined) setKaizntreeConnected(settings.kaizntree_connected);
+    if (settings.kaizntree_key)    setKaizntreeKey(settings.kaizntree_key);
+    if (settings.max_per_txn)      setMaxPerTxn(settings.max_per_txn);
+    if (settings.max_monthly)      setMaxMonthly(settings.max_monthly);
+    if (settings.approval_threshold) setApprovalThreshold(settings.approval_threshold);
+    if (settings.auto_approve !== undefined) setAutoApprove(settings.auto_approve);
+    if (settings.suppliers?.length) setSuppliers(settings.suppliers);
+    if (settings.recipes?.length) {
+      setRecipes(settings.recipes.map(r => ({
+        ...r,
+        unitsPerCase: r.unitsPerCase || 6,
+        unitSize: r.unitSize || "",
+        unitType: r.unitType || "bag",
+        ingredients: (r.ingredients || []).map(ing => ({
+          ...ing,
+          qtyPerUnit: ing.qtyPerUnit ?? ing.qty ?? 0,
+        }))
+      })));
+    }
+  }, [settings]);
+
+  // -----------------------------------------------------------------------
+  // Helpers
+  // -----------------------------------------------------------------------
+  function saveWithDelay(setter) { setter(true); setTimeout(() => setter(false), 2000); }
+
+  // -----------------------------------------------------------------------
+  // Save functions — now write to Supabase via context
+  // -----------------------------------------------------------------------
+  function saveProfile() {
+    saveSettings({ your_name: yourName, company_name: companyName });
+    saveWithDelay(setProfileSaved);
+  }
+
+  function saveEmail() {
+    saveSettings({ email_connected: emailConnected, email_address: emailAddress });
+    saveWithDelay(setEmailSaved);
+  }
+
+  function saveSlack() {
+    saveSettings({ slack_connected: slackConnected, slack_webhook: slackWebhook });
+    saveWithDelay(setSlackSaved);
+  }
+
+  function saveSheets() {
+    saveSettings({ sheets_connected: sheetsConnected, sheets_url: sheetsUrl, sku_col: skuCol, qty_col: qtyCol });
+    saveWithDelay(setSheetsSaved);
+  }
+
+  function saveKaizntree() {
+    saveSettings({ kaizntree_connected: kaizntreeConnected, kaizntree_key: kaizntreeKey });
+    saveWithDelay(setKaizntreeSaved);
+  }
+
+  function saveRules() {
+    saveSettings({ max_per_txn: maxPerTxn, max_monthly: maxMonthly, approval_threshold: approvalThreshold, auto_approve: autoApprove });
+    saveWithDelay(setRulesSaved);
+  }
+
   function saveRecipes(updated) {
-    lsSet("bytem_recipes", updated);
     setRecipes(updated);
+    saveSettings({ recipes: updated });
     saveWithDelay(setRecipeSaved);
   }
 
@@ -279,7 +323,7 @@ export default function Connections() {
     if (!newSupplier.name || !newSupplier.email) return;
     const updated = [...suppliers, { ...newSupplier, id: Date.now() }];
     setSuppliers(updated);
-    lsSet("bytem_suppliers", updated);
+    saveSettings({ suppliers: updated });
     setNewSupplier({ name: "", email: "", product: "", price: "" });
     setShowAddForm(false);
     saveWithDelay(setSupplierSaved);
@@ -288,7 +332,7 @@ export default function Connections() {
   function removeSupplier(id) {
     const updated = suppliers.filter(s => s.id !== id);
     setSuppliers(updated);
-    lsSet("bytem_suppliers", updated);
+    saveSettings({ suppliers: updated });
   }
 
   const tabs = ["profile", "connections", "suppliers", "recipes", "spend rules"];
@@ -344,7 +388,7 @@ export default function Connections() {
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <SaveBtn onClick={saveProfile} saved={profileSaved} />
+                  <SaveBtn onClick={saveProfile} saved={profileSaved} saving={saving} />
                 </div>
               </div>
             </Card>
@@ -356,7 +400,7 @@ export default function Connections() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: 32 }}>
             <Card>
               <CardHead icon="📧" title="Email — PO ingestion" description="Forward purchase orders here and the agent reads them automatically" connected={emailConnected}>
-                <Toggle on={emailConnected} onChange={v => { setEmailConnected(v); lsSet("bytem_emailConnected", v); }} />
+                <Toggle on={emailConnected} onChange={v => { setEmailConnected(v); saveSettings({ email_connected: v }); }} />
               </CardHead>
               {emailConnected && (
                 <div style={{ padding: "16px 22px" }}>
@@ -367,7 +411,7 @@ export default function Connections() {
                   </div>
                   <Input label="Or forward from your email" placeholder="orders@bytem.com" value={emailAddress} onChange={setEmailAddress} hint="We'll set up auto-forwarding rules for you" />
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <SaveBtn onClick={saveEmail} saved={emailSaved} />
+                    <SaveBtn onClick={saveEmail} saved={emailSaved} saving={saving} />
                   </div>
                 </div>
               )}
@@ -375,13 +419,13 @@ export default function Connections() {
 
             <Card>
               <CardHead icon="💬" title="Slack — approval notifications" description="Get notified when payments need approval or agents are blocked" connected={slackConnected}>
-                <Toggle on={slackConnected} onChange={v => { setSlackConnected(v); lsSet("bytem_slackConnected", v); }} />
+                <Toggle on={slackConnected} onChange={v => { setSlackConnected(v); saveSettings({ slack_connected: v }); }} />
               </CardHead>
               {slackConnected && (
                 <div style={{ padding: "16px 22px" }}>
                   <Input label="Slack webhook URL" placeholder="https://hooks.slack.com/services/..." value={slackWebhook} onChange={setSlackWebhook} hint="Create a webhook in your Slack workspace settings" />
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <SaveBtn onClick={saveSlack} saved={slackSaved} />
+                    <SaveBtn onClick={saveSlack} saved={slackSaved} saving={saving} />
                   </div>
                 </div>
               )}
@@ -389,7 +433,7 @@ export default function Connections() {
 
             <Card>
               <CardHead icon="📊" title="Google Sheets — inventory" description="Connect your inventory spreadsheet so the agent knows what you have on hand" connected={sheetsConnected}>
-                <Toggle on={sheetsConnected} onChange={v => { setSheetsConnected(v); lsSet("bytem_sheetsConnected", v); }} />
+                <Toggle on={sheetsConnected} onChange={v => { setSheetsConnected(v); saveSettings({ sheets_connected: v }); }} />
               </CardHead>
               {sheetsConnected && (
                 <div style={{ padding: "16px 22px" }}>
@@ -399,7 +443,7 @@ export default function Connections() {
                     <Input label="Quantity on hand column" placeholder="B" value={qtyCol} onChange={setQtyCol} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <SaveBtn onClick={saveSheets} saved={sheetsSaved} />
+                    <SaveBtn onClick={saveSheets} saved={sheetsSaved} saving={saving} />
                   </div>
                 </div>
               )}
@@ -407,13 +451,13 @@ export default function Connections() {
 
             <Card>
               <CardHead icon="🌴" title="Kaizntree — inventory & ops" description="Pull live inventory and production data directly from Kaizntree" connected={kaizntreeConnected}>
-                <Toggle on={kaizntreeConnected} onChange={v => { setKaizntreeConnected(v); lsSet("bytem_kaizntreeConnected", v); }} />
+                <Toggle on={kaizntreeConnected} onChange={v => { setKaizntreeConnected(v); saveSettings({ kaizntree_connected: v }); }} />
               </CardHead>
               {kaizntreeConnected && (
                 <div style={{ padding: "16px 22px" }}>
                   <Input label="Kaizntree API key" placeholder="kz_live_..." value={kaizntreeKey} onChange={setKaizntreeKey} type="password" hint="Find this in Kaizntree → Settings → API" />
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <SaveBtn onClick={saveKaizntree} saved={kaizntreeSaved} />
+                    <SaveBtn onClick={saveKaizntree} saved={kaizntreeSaved} saving={saving} />
                   </div>
                 </div>
               )}
@@ -421,7 +465,7 @@ export default function Connections() {
 
             <Card>
               <CardHead icon="💳" title="Stripe — payment execution" description="Connect Stripe to execute governed supplier payments automatically" connected={stripeConnected}>
-                <Toggle on={stripeConnected} onChange={v => { setStripeConnected(v); lsSet("bytem_stripeConnected", v); }} />
+                <Toggle on={stripeConnected} onChange={v => { setStripeConnected(v); saveSettings({ stripe_connected: v }); }} />
               </CardHead>
               {stripeConnected && (
                 <div style={{ padding: "16px 22px" }}>
@@ -487,7 +531,6 @@ export default function Connections() {
         {/* RECIPES TAB */}
         {activeTab === "recipes" && (
           <div style={{ paddingBottom: 32 }}>
-
             {/* SKU tabs + add SKU */}
             <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
               {recipes.map((r, i) => (
@@ -504,7 +547,7 @@ export default function Connections() {
             </div>
 
             <Card>
-              {/* SKU header — all editable */}
+              {/* SKU header */}
               <div style={{ padding: "18px 22px", borderBottom: "1px solid #f5f5f5" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                   <div>
@@ -632,12 +675,12 @@ export default function Connections() {
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {recipeSaved && <span style={{ fontSize: 11, color: "#0a7a9a" }}>✓ saved</span>}
-                  <SaveBtn onClick={() => saveRecipes(recipes)} saved={recipeSaved} />
+                  <SaveBtn onClick={() => saveRecipes(recipes)} saved={recipeSaved} saving={saving} />
                 </div>
               </div>
             </Card>
 
-            {/* Cross-SKU summary — only shows if PO is active */}
+            {/* Cross-SKU summary */}
             {poCases ? (
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
@@ -696,7 +739,7 @@ export default function Connections() {
                   <Toggle on={autoApprove} onChange={setAutoApprove} />
                 </div>
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <SaveBtn onClick={saveRules} saved={rulesSaved} />
+                  <SaveBtn onClick={saveRules} saved={rulesSaved} saving={saving} />
                 </div>
               </div>
             </Card>
