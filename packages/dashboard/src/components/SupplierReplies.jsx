@@ -158,16 +158,16 @@ function ThreadCard({ thread, onParse, onDraftResponse, autoExpand }) {
                 </div>
               )}
 
-              {/* Draft response section */}
+              {/* Draft response section — prominent, above fold */}
               {!sent && (
                 <>
                   {!responseDraft ? (
                     <button
                       onClick={draftResponse}
                       disabled={draftingResponse}
-                      style={{ width: "100%", padding: "10px", background: draftingResponse ? "#f0f0f0" : DARK, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, color: draftingResponse ? "#bbb" : "#fff", cursor: draftingResponse ? "not-allowed" : "pointer", fontFamily: "inherit" }}
+                      style={{ width: "100%", padding: "12px", background: draftingResponse ? "#f0f0f0" : "#59E2FD", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, color: draftingResponse ? "#bbb" : "#1a1a1a", cursor: draftingResponse ? "not-allowed" : "pointer", fontFamily: "'Syne', sans-serif", marginBottom: 4 }}
                     >
-                      {draftingResponse ? "✍ drafting response..." : "✍ draft reply →"}
+                      {draftingResponse ? "✍ drafting AI response..." : "✍ draft reply →"}
                     </button>
                   ) : (
                     <div>
@@ -334,16 +334,37 @@ export default function SupplierReplies({ userEmail }) {
         <div style={{ padding: "24px 0", textAlign: "center", color: "#ccc", fontSize: 12 }}>
           No supplier emails sent yet — run a PO to generate emails
         </div>
-      ) : (
-        threads.map(thread => (
-          <ThreadCard
-            key={thread.id}
-            thread={thread}
-            onParse={parseThread}
-            autoExpand={newReplyIds.has(thread.id) || thread.reply_status !== "waiting"}
-          />
-        ))
-      )}
+      ) : (() => {
+        // Group threads by PO number
+        const groups = {};
+        threads.forEach(t => {
+          const key = t.po_number || "unknown";
+          if (!groups[key]) groups[key] = { po_number: t.po_number, retailer: t.retailer, threads: [] };
+          groups[key].threads.push(t);
+        });
+        return Object.values(groups).map(group => (
+          <div key={group.po_number} style={{ marginBottom: 20 }}>
+            {Object.keys(groups).length > 1 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a", fontFamily: "'Syne', sans-serif" }}>
+                  PO #{group.po_number || "—"}
+                </div>
+                {group.retailer && <div style={{ fontSize: 10, color: "#bbb" }}>{group.retailer}</div>}
+                <div style={{ flex: 1, height: 1, background: "#ebebeb" }} />
+                <div style={{ fontSize: 10, color: "#bbb" }}>{group.threads.length} supplier{group.threads.length !== 1 ? "s" : ""}</div>
+              </div>
+            )}
+            {group.threads.map(thread => (
+              <ThreadCard
+                key={thread.id}
+                thread={thread}
+                onParse={parseThread}
+                autoExpand={newReplyIds.has(thread.id) || thread.reply_status !== "waiting"}
+              />
+            ))}
+          </div>
+        ));
+      })()}
     </div>
   );
 }

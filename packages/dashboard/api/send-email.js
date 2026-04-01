@@ -11,10 +11,12 @@ export default async function handler(req, res) {
     subject,
     body,
     fromName,
-    userEmail,        // NEW: needed to save thread
-    ingredient,       // NEW: ingredient this email is about
-    qtyLbs,           // NEW: quantity in lbs
-    costEstimate,     // NEW: estimated cost
+    userEmail,
+    ingredient,
+    qtyLbs,
+    costEstimate,
+    poNumber,         // NEW: PO number for grouping
+    retailer,         // NEW: retailer name for grouping
   } = req.body;
 
   const SENDGRID_KEY = process.env.SENDGRID_API_KEY;
@@ -66,6 +68,8 @@ export default async function handler(req, res) {
             cost_estimate: parseFloat(costEstimate) || 0,
             reply_status: "waiting",
             sent_at: new Date().toISOString(),
+            po_number: poNumber || "",
+            retailer: retailer || "",
           }),
         });
       } catch (threadErr) {

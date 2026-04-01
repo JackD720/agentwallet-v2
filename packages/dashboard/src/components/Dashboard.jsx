@@ -299,6 +299,8 @@ export default function Dashboard() {
           ingredient: email.ingredient || "",
           qtyLbs: email.qty_lbs || 0,
           costEstimate: email.cost_estimate || 0,
+          poNumber: parsedPO?.po_number || "",
+          retailer: parsedPO?.retailer || "",
         }),
       });
       const data = await res.json();
