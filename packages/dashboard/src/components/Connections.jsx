@@ -180,6 +180,80 @@ export default function Connections() {
     saveWithDelay(setRulesSaved);
   }
 
+  // Recipes / BOM
+  const defaultRecipes = [
+    {
+      id: 1, sku: "BB-001", name: "BYTE'M Brownies 10/4.7 OZ Classic",
+      ingredients: [
+        { id: 1, name: "Chocolate Chips - Semi Sweet", qty: 12, unit: "lbs" },
+        { id: 2, name: "Cane Sugar", qty: 6, unit: "lbs" },
+        { id: 3, name: "Butter, Salted", qty: 8, unit: "lbs" },
+        { id: 4, name: "Liquid Eggs - Pasteurized", qty: 3, unit: "lbs" },
+        { id: 5, name: "All Purpose Flour", qty: 4, unit: "lbs" },
+      ]
+    },
+    {
+      id: 2, sku: "BB-002", name: "BYTE'M Brownies 10/4.7 OZ S'Mores",
+      ingredients: [
+        { id: 1, name: "Chocolate Chips - Semi Sweet", qty: 10, unit: "lbs" },
+        { id: 2, name: "Cane Sugar", qty: 6, unit: "lbs" },
+        { id: 3, name: "Butter, Salted", qty: 8, unit: "lbs" },
+        { id: 4, name: "Liquid Eggs - Pasteurized", qty: 3, unit: "lbs" },
+        { id: 5, name: "All Purpose Flour", qty: 4, unit: "lbs" },
+        { id: 6, name: "Mini Marshmallows", qty: 2, unit: "lbs" },
+        { id: 7, name: "Graham Cracker Crumbs", qty: 1.5, unit: "lbs" },
+      ]
+    },
+    {
+      id: 3, sku: "BB-003", name: "BYTE'M Brownies 10/4.7 OZ Cookies & Cream",
+      ingredients: [
+        { id: 1, name: "Chocolate Chips - Semi Sweet", qty: 10, unit: "lbs" },
+        { id: 2, name: "Cane Sugar", qty: 6, unit: "lbs" },
+        { id: 3, name: "Butter, Salted", qty: 8, unit: "lbs" },
+        { id: 4, name: "Liquid Eggs - Pasteurized", qty: 3, unit: "lbs" },
+        { id: 5, name: "All Purpose Flour", qty: 4, unit: "lbs" },
+        { id: 6, name: "Oreo Cookie Pieces", qty: 3, unit: "lbs" },
+      ]
+    },
+  ];
+
+  const [recipes, setRecipes] = useState(() => ls("bytem_recipes", defaultRecipes));
+  const [activeRecipe, setActiveRecipe] = useState(0);
+  const [recipeSaved, setRecipeSaved] = useState(false);
+  const [newIngredient, setNewIngredient] = useState({ name: "", qty: "", unit: "lbs" });
+  const [showIngredientForm, setShowIngredientForm] = useState(false);
+
+  function saveRecipes(updated) {
+    lsSet("bytem_recipes", updated);
+    setRecipes(updated);
+    saveWithDelay(setRecipeSaved);
+  }
+
+  function updateIngredient(recipeIdx, ingId, field, val) {
+    const updated = recipes.map((r, ri) => ri !== recipeIdx ? r : {
+      ...r,
+      ingredients: r.ingredients.map(ing => ing.id === ingId ? { ...ing, [field]: field === "qty" ? parseFloat(val) || 0 : val } : ing)
+    });
+    saveRecipes(updated);
+  }
+
+  function removeIngredient(recipeIdx, ingId) {
+    const updated = recipes.map((r, ri) => ri !== recipeIdx ? r : {
+      ...r, ingredients: r.ingredients.filter(ing => ing.id !== ingId)
+    });
+    saveRecipes(updated);
+  }
+
+  function addIngredient(recipeIdx) {
+    if (!newIngredient.name || !newIngredient.qty) return;
+    const updated = recipes.map((r, ri) => ri !== recipeIdx ? r : {
+      ...r, ingredients: [...r.ingredients, { ...newIngredient, id: Date.now(), qty: parseFloat(newIngredient.qty) }]
+    });
+    saveRecipes(updated);
+    setNewIngredient({ name: "", qty: "", unit: "lbs" });
+    setShowIngredientForm(false);
+  }
+
   function addSupplier() {
     if (!newSupplier.name || !newSupplier.email) return;
     const updated = [...suppliers, { ...newSupplier, id: Date.now() }];
@@ -196,7 +270,7 @@ export default function Connections() {
     lsSet("bytem_suppliers", updated);
   }
 
-  const tabs = ["profile", "connections", "suppliers", "spend rules"];
+  const tabs = ["profile", "connections", "suppliers", "recipes", "spend rules"];
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f8f6", fontFamily: "'DM Mono', 'Fira Code', monospace", color: DARK }}>
@@ -385,6 +459,120 @@ export default function Connections() {
                 )}
               </div>
             </Card>
+          </div>
+        )}
+
+        {/* RECIPES TAB */}
+        {activeTab === "recipes" && (
+          <div style={{ paddingBottom: 32 }}>
+            {/* SKU selector */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {recipes.map((r, i) => (
+                <button key={r.id} onClick={() => setActiveRecipe(i)} style={{ padding: "8px 14px", background: activeRecipe === i ? DARK : "#fff", color: activeRecipe === i ? "#fff" : "#888", border: `1px solid ${activeRecipe === i ? DARK : "#ebebeb"}`, borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  {r.sku}
+                </button>
+              ))}
+            </div>
+
+            <Card>
+              <div style={{ padding: "18px 22px", borderBottom: "1px solid #f5f5f5" }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{recipes[activeRecipe]?.name}</div>
+                <div style={{ fontSize: 12, color: "#bbb", marginTop: 2 }}>Bill of materials per case — used to calculate ingredient order quantities</div>
+              </div>
+
+              {/* Ingredient list */}
+              <div style={{ padding: "0 22px" }}>
+                {/* Header */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 70px 40px", gap: 8, padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Ingredient</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Qty / case</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Unit</div>
+                  <div />
+                </div>
+
+                {recipes[activeRecipe]?.ingredients.map(ing => (
+                  <div key={ing.id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 70px 40px", gap: 8, padding: "10px 0", borderBottom: "1px solid #f8f8f8", alignItems: "center" }}>
+                    <div style={{ fontSize: 13, color: DARK }}>{ing.name}</div>
+                    <input
+                      type="number"
+                      value={ing.qty}
+                      onChange={e => updateIngredient(activeRecipe, ing.id, "qty", e.target.value)}
+                      style={{ padding: "5px 8px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 12, color: DARK, fontFamily: "inherit", width: "100%", background: "#fafafa" }}
+                    />
+                    <select
+                      value={ing.unit}
+                      onChange={e => updateIngredient(activeRecipe, ing.id, "unit", e.target.value)}
+                      style={{ padding: "5px 8px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 12, color: DARK, fontFamily: "inherit", background: "#fafafa" }}
+                    >
+                      {["lbs", "oz", "kg", "g", "gal", "qt", "L", "ml", "units", "bags", "each"].map(u => <option key={u}>{u}</option>)}
+                    </select>
+                    <button onClick={() => removeIngredient(activeRecipe, ing.id)} style={{ fontSize: 11, color: "#ff4d4d", background: "#fff0f0", border: "1px solid #ffd5d5", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}>✕</button>
+                  </div>
+                ))}
+
+                {/* Total lbs per case */}
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderTop: "2px solid #f0f0f0", marginTop: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#888" }}>Total weight per case</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: DARK }}>
+                    {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + i.qty, 0).toFixed(1)} lbs
+                  </span>
+                </div>
+              </div>
+
+              {/* Add ingredient form */}
+              {showIngredientForm && (
+                <div style={{ padding: "14px 22px", background: ACCENT_BG, borderTop: "1px solid #ebebeb" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#0a7a9a", marginBottom: 10 }}>Add ingredient</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px", gap: 8, marginBottom: 8 }}>
+                    <input placeholder="Ingredient name" value={newIngredient.name} onChange={e => setNewIngredient(p => ({ ...p, name: e.target.value }))}
+                      style={{ padding: "8px 10px", border: `1px solid ${ACCENT_BORDER}`, borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }} />
+                    <input type="number" placeholder="Qty" value={newIngredient.qty} onChange={e => setNewIngredient(p => ({ ...p, qty: e.target.value }))}
+                      style={{ padding: "8px 10px", border: `1px solid ${ACCENT_BORDER}`, borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }} />
+                    <select value={newIngredient.unit} onChange={e => setNewIngredient(p => ({ ...p, unit: e.target.value }))}
+                      style={{ padding: "8px 10px", border: `1px solid ${ACCENT_BORDER}`, borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }}>
+                      {["lbs", "oz", "kg", "g", "gal", "qt", "L", "ml", "units", "bags", "each"].map(u => <option key={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button onClick={() => setShowIngredientForm(false)} style={{ padding: "6px 12px", background: "#fff", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 12, cursor: "pointer", color: "#888" }}>cancel</button>
+                    <button onClick={() => addIngredient(activeRecipe)} style={{ padding: "6px 14px", background: ACCENT, border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, color: DARK, cursor: "pointer" }}>add</button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ padding: "14px 22px", borderTop: "1px solid #f5f5f5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button onClick={() => setShowIngredientForm(!showIngredientForm)} style={{ fontSize: 12, color: "#888", background: "none", border: "1px solid #ebebeb", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>
+                  + add ingredient
+                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {recipeSaved && <span style={{ fontSize: 11, color: "#0a7a9a" }}>✓ saved</span>}
+                  <SaveBtn onClick={() => saveRecipes(recipes)} saved={recipeSaved} />
+                </div>
+              </div>
+            </Card>
+
+            {/* Summary across all SKUs */}
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>All ingredients across SKUs</div>
+              <Card>
+                <div style={{ padding: "0 22px" }}>
+                  {(() => {
+                    const allIngs = {};
+                    recipes.forEach(r => r.ingredients.forEach(ing => {
+                      const key = `${ing.name}__${ing.unit}`;
+                      allIngs[key] = (allIngs[key] || { name: ing.name, unit: ing.unit, total: 0 });
+                      allIngs[key].total += ing.qty;
+                    }));
+                    return Object.values(allIngs).map((ing, i, arr) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: i < arr.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                        <span style={{ fontSize: 13, color: DARK }}>{ing.name}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#888" }}>{ing.total} {ing.unit} per case (all SKUs)</span>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </Card>
+            </div>
           </div>
         )}
 
