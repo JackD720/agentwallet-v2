@@ -11,7 +11,7 @@ export default async function handler(req, res) {
 
   // User denied access
   if (error) {
-    return res.redirect(`${BASE_URL}/?gmail=denied#settings`);
+    return res.redirect(`${BASE_URL}/#settings?gmail=denied`);
   }
 
   if (!code || !userEmail) {
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     const tokens = await tokenRes.json();
     if (!tokens.access_token) {
       console.error("Token exchange failed:", tokens);
-      return res.redirect(`${BASE_URL}/?gmail=error#settings`);
+      return res.redirect(`${BASE_URL}/#settings?gmail=error`);
     }
 
     // 2. Get their Gmail address
@@ -54,32 +54,34 @@ export default async function handler(req, res) {
     // 3. Save tokens to Supabase
     const expiry = Date.now() + (tokens.expires_in * 1000);
 
-    const saveRes = await fetch(`${SUPABASE_URL}/rest/v1/bytem_settings`, {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=representation",
-      },
-      body: JSON.stringify({
-        email: userEmail,
-        gmail_connected: true,
-        gmail_email: gmailEmail,
-        gmail_access_token: tokens.access_token,
-        gmail_refresh_token: tokens.refresh_token || "",
-        gmail_token_expiry: expiry,
-      }),
-    });
+    // Use PATCH to update existing row (avoids duplicate key error)
+    const saveRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/bytem_settings?email=eq.${encodeURIComponent(userEmail)}`,
+      {
+        method: "PATCH",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify({
+          gmail_connected: true,
+          gmail_email: gmailEmail,
+          gmail_access_token: tokens.access_token,
+          gmail_refresh_token: tokens.refresh_token || "",
+          gmail_token_expiry: expiry,
+        }),
+      }
+    );
 
     if (!saveRes.ok) {
       console.error("Supabase save failed:", await saveRes.text());
-      return res.redirect(`${BASE_URL}/?gmail=error#settings`);
+      return res.redirect(`${BASE_URL}/#settings?gmail=error`);
     }
 
     // 4. Redirect back to settings with success
-    // Use both hash and query so the Connections component can detect it
-    return res.redirect(`${BASE_URL}/?gmail=connected#settings`);
+    return res.redirect(`${BASE_URL}/#settings?gmail=connected`);
 
   } catch (err) {
     console.error("Gmail callback error:", err);
