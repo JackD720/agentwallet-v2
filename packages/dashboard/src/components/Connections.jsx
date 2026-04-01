@@ -103,7 +103,7 @@ export default function Connections() {
   // -----------------------------------------------------------------------
   // Supabase context
   // -----------------------------------------------------------------------
-  const { settings, saveSettings, saving, userEmail } = useSettings();
+  const { settings, saveSettings, saving, userEmail, refreshSettings } = useSettings();
   const syncedRef = useRef(false); // only sync once on first load
 
   const [activeTab, setActiveTab] = useState("profile");
@@ -199,21 +199,26 @@ export default function Connections() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const gmailStatus = params.get("gmail");
-    if (gmailStatus === "connected" && userEmail) {
-      // Settings will reload via the main load effect — just mark gmail as connected optimistically
-      fetch(`/api/settings-get?email=${encodeURIComponent(userEmail)}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.settings?.gmail_connected) {
-            setGmailConnected(true);
-            setGmailEmail(data.settings.gmail_email || "");
-          }
-        })
-        .catch(() => {});
-      // Clean up URL
+    if (gmailStatus === "connected") {
+      // Force fresh Supabase fetch — bypasses local cache which has stale gmail_connected=false
+      const email = userEmail || localStorage.getItem("bytem_user_email");
+      if (email) {
+        fetch(`/api/settings-get?email=${encodeURIComponent(email)}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.settings?.gmail_connected) {
+              setGmailConnected(true);
+              setGmailEmail(data.settings.gmail_email || "");
+              // Also update the context cache so it sticks
+              if (refreshSettings) refreshSettings();
+            }
+          })
+          .catch(() => {});
+      }
+      // Clean up URL param but keep hash
       window.history.replaceState({}, "", window.location.pathname + window.location.hash);
     }
-  }, [userEmail]);
+  }, []); // run once on mount — URL param is only present right after OAuth redirect
 
   useEffect(() => {
     if (!settings || syncedRef.current) return;

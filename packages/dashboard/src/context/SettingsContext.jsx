@@ -147,6 +147,22 @@ export function SettingsProvider({ children }) {
     await saveToSupabase(email, initial);
   }
 
+  // Force a fresh load from Supabase (used after OAuth redirects)
+  async function refreshSettings() {
+    if (!userEmail) return;
+    try {
+      const res = await fetch(`/api/settings-get?email=${encodeURIComponent(userEmail)}`);
+      const data = await res.json();
+      if (data.exists && data.settings) {
+        const loaded = { ...DEFAULT_SETTINGS, ...data.settings };
+        setSettings(loaded);
+        lsSet("bytem_settings_cache", loaded);
+      }
+    } catch (err) {
+      console.error("refreshSettings failed:", err);
+    }
+  }
+
   function signOut() {
     localStorage.removeItem("bytem_user_email");
     localStorage.removeItem("bytem_settings_cache");
@@ -163,6 +179,7 @@ export function SettingsProvider({ children }) {
     userEmail,
     registerUser,
     signOut,
+    refreshSettings,
     get yourName() { return settings?.your_name || ""; },
     get companyName() { return settings?.company_name || ""; },
     get sheetsUrl() { return settings?.sheets_url || ""; },
