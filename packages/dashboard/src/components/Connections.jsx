@@ -126,8 +126,10 @@ export default function Connections() {
   // Sheets
   const [sheetsConnected, setSheetsConnected] = useState(() => ls("bytem_sheetsConnected", false));
   const [sheetsUrl, setSheetsUrl] = useState(() => ls("bytem_sheetsUrl", ""));
-  const [skuCol, setSkuCol] = useState(() => ls("bytem_skuCol", "A"));
-  const [qtyCol, setQtyCol] = useState(() => ls("bytem_qtyCol", "B"));
+  const [ingredientCol, setIngredientCol] = useState(() => ls("bytem_ingredientCol", "B"));
+  const [priceCol, setPriceCol] = useState(() => ls("bytem_priceCol", "C"));
+  const [inventoryCol, setInventoryCol] = useState(() => ls("bytem_inventoryCol", "F"));
+  const [headerRow, setHeaderRow] = useState(() => ls("bytem_headerRow", "4"));
   const [sheetsSaved, setSheetsSaved] = useState(false);
 
   // Kaizntree
@@ -201,8 +203,10 @@ export default function Connections() {
     if (settings.slack_webhook)    setSlackWebhook(settings.slack_webhook);
     if (settings.sheets_connected !== undefined) setSheetsConnected(settings.sheets_connected);
     if (settings.sheets_url)       setSheetsUrl(settings.sheets_url);
-    if (settings.sku_col)          setSkuCol(settings.sku_col);
-    if (settings.qty_col)          setQtyCol(settings.qty_col);
+    if (settings.ingredient_col)   setIngredientCol(settings.ingredient_col);
+    if (settings.price_col)        setPriceCol(settings.price_col);
+    if (settings.inventory_col)    setInventoryCol(settings.inventory_col);
+    if (settings.header_row)       setHeaderRow(settings.header_row);
     if (settings.kaizntree_connected !== undefined) setKaizntreeConnected(settings.kaizntree_connected);
     if (settings.kaizntree_key)    setKaizntreeKey(settings.kaizntree_key);
     if (settings.max_per_txn)      setMaxPerTxn(settings.max_per_txn);
@@ -248,7 +252,7 @@ export default function Connections() {
   }
 
   function saveSheets() {
-    saveSettings({ sheets_connected: sheetsConnected, sheets_url: sheetsUrl, sku_col: skuCol, qty_col: qtyCol });
+    saveSettings({ sheets_connected: sheetsConnected, sheets_url: sheetsUrl, ingredient_col: ingredientCol, price_col: priceCol, inventory_col: inventoryCol, header_row: headerRow });
     saveWithDelay(setSheetsSaved);
   }
 
@@ -438,10 +442,18 @@ export default function Connections() {
               {sheetsConnected && (
                 <div style={{ padding: "16px 22px" }}>
                   <Input label="Google Sheets URL" placeholder="https://docs.google.com/spreadsheets/d/..." value={sheetsUrl} onChange={setSheetsUrl} />
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-                    <Input label="SKU column" placeholder="A" value={skuCol} onChange={setSkuCol} />
-                    <Input label="Quantity on hand column" placeholder="B" value={qtyCol} onChange={setQtyCol} />
+                  <div style={{ marginBottom: 6, fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em" }}>Column mapping</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 90px", gap: 10, marginBottom: 14 }}>
+                    <Input label="Ingredient name col" placeholder="B" value={ingredientCol} onChange={v => setIngredientCol(v.toUpperCase())} hint="col with ingredient names" />
+                    <Input label="Price per lb col" placeholder="C" value={priceCol} onChange={v => setPriceCol(v.toUpperCase())} hint="col with $/lb prices" />
+                    <Input label="Inventory on hand col" placeholder="F" value={inventoryCol} onChange={v => setInventoryCol(v.toUpperCase())} hint="col with lbs on hand" />
+                    <Input label="Header row #" placeholder="4" value={headerRow} onChange={setHeaderRow} hint="row with headers" />
                   </div>
+                  {sheetsUrl && (
+                    <div style={{ padding: "9px 12px", background: "#f0fcff", border: "1px solid #c8f4fd", borderRadius: 8, marginBottom: 14, fontSize: 11, color: "#0a7a9a" }}>
+                      Reading: col <strong>{ingredientCol}</strong> (ingredient) · col <strong>{priceCol}</strong> (price/lb) · col <strong>{inventoryCol}</strong> (on hand) · headers row <strong>{headerRow}</strong>
+                    </div>
+                  )}
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <SaveBtn onClick={saveSheets} saved={sheetsSaved} saving={saving} />
                   </div>

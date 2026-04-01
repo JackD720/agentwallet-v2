@@ -109,7 +109,7 @@ export default function Dashboard() {
   // -----------------------------------------------------------------------
   // Pull everything from Supabase context instead of raw localStorage
   // -----------------------------------------------------------------------
-  const { settings, saveSettings, yourName, companyName, sheetsUrl, suppliers, recipes } = useSettings();
+  const { settings, saveSettings, yourName, companyName, sheetsUrl, suppliers, recipes, colConfig } = useSettings();
 
   const [showPOInput, setShowPOInput] = useState(false);
   const [poText, setPoText] = useState("");
@@ -211,7 +211,13 @@ export default function Dashboard() {
           const sheetRes = await fetch("/api/fetch-inventory", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sheetUrl: activeSheetUrl }),
+            body: JSON.stringify({
+              sheetUrl: activeSheetUrl,
+              ingredientCol: colConfig.ingredientCol,
+              priceCol: colConfig.priceCol,
+              inventoryCol: colConfig.inventoryCol,
+              headerRow: colConfig.headerRow,
+            }),
           });
           const sheetData = await sheetRes.json();
           if (sheetData.success) ingredientInventory = sheetData.data;
