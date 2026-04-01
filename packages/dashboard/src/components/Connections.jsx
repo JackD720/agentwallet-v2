@@ -195,30 +195,27 @@ export default function Connections() {
   // -----------------------------------------------------------------------
   // One-time sync: when Supabase settings load, override local state
   // -----------------------------------------------------------------------
-  // Re-fetch settings from Supabase after Gmail OAuth redirect
+  // Always check real Gmail state from Supabase on mount — bypasses stale local cache
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const gmailStatus = params.get("gmail");
-    if (gmailStatus === "connected") {
-      // Force fresh Supabase fetch — bypasses local cache which has stale gmail_connected=false
-      const email = userEmail || localStorage.getItem("bytem_user_email");
-      if (email) {
-        fetch(`/api/settings-get?email=${encodeURIComponent(email)}`)
-          .then(r => r.json())
-          .then(data => {
-            if (data.settings?.gmail_connected) {
-              setGmailConnected(true);
-              setGmailEmail(data.settings.gmail_email || "");
-              // Also update the context cache so it sticks
-              if (refreshSettings) refreshSettings();
-            }
-          })
-          .catch(() => {});
-      }
-      // Clean up URL param but keep hash
+    const email = userEmail || localStorage.getItem("bytem_user_email");
+    if (!email) return;
+
+    fetch(`/api/settings-get?email=${encodeURIComponent(email)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.settings) {
+          setGmailConnected(!!data.settings.gmail_connected);
+          setGmailEmail(data.settings.gmail_email || "");
+          if (refreshSettings) refreshSettings();
+        }
+      })
+      .catch(() => {});
+
+    // Clean up any OAuth redirect params from URL
+    if (window.location.search.includes("gmail=")) {
       window.history.replaceState({}, "", window.location.pathname + window.location.hash);
     }
-  }, []); // run once on mount — URL param is only present right after OAuth redirect
+  }, []); // runs once on mount
 
   useEffect(() => {
     if (!settings || syncedRef.current) return;
