@@ -137,6 +137,7 @@ export default function Dashboard() {
   const [draftedEmails, setDraftedEmails] = useState([]);
   const [sentEmails, setSentEmails] = useState([]);
   const [sendingEmails, setSendingEmails] = useState([]);
+  const [confirmEmail, setConfirmEmail] = useState(null); // email pending confirmation
   const [mismatches, setMismatches] = useState([]);
   const [totalVol, setTotalVol] = useState(128400);
 
@@ -165,21 +166,26 @@ export default function Dashboard() {
           const settingsOz = parseFloat(recipe.unitSize) || null;
           const settingsPack = recipe.unitsPerCase || null;
 
-          if (poOz && settingsOz && Math.abs(poOz - settingsOz) > 0.05) {
+          // Only warn if BOTH oz and pack differ (real format change)
+          // or if oz differs by more than 0.5 (significant)
+          const ozDiffers = poOz && settingsOz && Math.abs(poOz - settingsOz) > 0.5;
+          const packDiffers = poPack && settingsPack && poPack !== settingsPack;
+
+          if (ozDiffers && packDiffers) {
+            warnings.push({
+              sku: item.sku || recipe.sku,
+              type: "format_change",
+              po: `${poPack}/${poOz} oz`,
+              settings: `${settingsPack}/${settingsOz} oz`,
+              message: `PO format ${poPack}/${poOz}oz doesn't match your recipe ${settingsPack}/${settingsOz}oz`
+            });
+          } else if (ozDiffers && !poPack) {
             warnings.push({
               sku: item.sku || recipe.sku,
               type: "unit_size",
-              po: `${poPack ? poPack + "/" : ""}${poOz} oz`,
-              settings: `${settingsPack}/${settingsOz} oz`,
+              po: `${poOz} oz`,
+              settings: `${settingsOz} oz`,
               message: `PO shows ${poOz} oz but your recipe has ${settingsOz} oz`
-            });
-          } else if (poPack && settingsPack && poPack !== settingsPack) {
-            warnings.push({
-              sku: item.sku || recipe.sku,
-              type: "case_pack",
-              po: `${poPack}-pack`,
-              settings: `${settingsPack}-pack`,
-              message: `PO shows ${poPack} units/case but your recipe has ${settingsPack}`
             });
           }
         }
@@ -476,7 +482,7 @@ export default function Dashboard() {
                       </div>
                       <button
                         className="send-btn"
-                        onClick={() => !sentEmails.includes(email.to) && !sendingEmails.includes(email.to) && handleSend(email)}
+                        onClick={() => !sentEmails.includes(email.to) && !sendingEmails.includes(email.to) && setConfirmEmail(email)}
                         style={{ marginTop: 8, fontSize: 11, fontWeight: 500, color: sentEmails.includes(email.to) ? "#0a7a9a" : DARK, background: sentEmails.includes(email.to) ? ACCENT_BG : ACCENT, border: `1px solid ${sentEmails.includes(email.to) ? ACCENT_BORDER : ACCENT}`, padding: "4px 12px", borderRadius: 6, cursor: sentEmails.includes(email.to) ? "default" : "pointer", transition: "opacity 0.2s" }}>
                         {sentEmails.includes(email.to) ? "✓ sent" : sendingEmails.includes(email.to) ? "sending..." : "approve + send"}
                       </button>
@@ -546,6 +552,40 @@ export default function Dashboard() {
           byte'm ops · powered by AgentWallet · arXiv:2501.10114
         </div>
       </div>
+
+      {/* Send confirmation modal */}
+      {confirmEmail && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24 }}>
+          <div style={{ background: "#fff", borderRadius: 16, maxWidth: 560, width: "100%", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid #ebebeb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 16, color: DARK }}>Confirm & Send</div>
+                <div style={{ fontSize: 12, color: "#bbb", marginTop: 2 }}>Review before sending to {confirmEmail.to}</div>
+              </div>
+              <button onClick={() => setConfirmEmail(null)} style={{ background: "none", border: "none", fontSize: 18, color: "#bbb", cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ padding: "16px 24px", borderBottom: "1px solid #f5f5f5" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>To</div>
+              <div style={{ fontSize: 13, color: DARK, marginBottom: 12 }}>{confirmEmail.to} &lt;{confirmEmail.email}&gt;</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Subject</div>
+              <div style={{ fontSize: 13, color: DARK, marginBottom: 12 }}>{confirmEmail.subject}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Message</div>
+              <div style={{ fontSize: 12, color: "#555", lineHeight: 1.7, background: "#f8f8f8", borderRadius: 8, padding: "12px 14px", whiteSpace: "pre-wrap", maxHeight: 240, overflowY: "auto", fontFamily: "'DM Mono', monospace" }}>
+                {confirmEmail.body?.split('\n').slice(1).join('\n').trim()}
+              </div>
+            </div>
+            <div style={{ padding: "16px 24px", display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setConfirmEmail(null)} style={{ padding: "10px 20px", background: "#fff", border: "1px solid #ebebeb", borderRadius: 9, fontSize: 13, cursor: "pointer", color: "#888" }}>
+                Cancel
+              </button>
+              <button onClick={() => { handleSend(confirmEmail); setConfirmEmail(null); }}
+                style={{ padding: "10px 24px", background: ACCENT, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, color: DARK, cursor: "pointer", fontFamily: "'Syne', sans-serif" }}>
+                ✓ Confirm & Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

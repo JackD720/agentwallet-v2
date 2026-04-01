@@ -2,6 +2,50 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Map supplier product types to ingredient keys so we can find real quantities
+function getRelevantQuantity(supplier, inventoryReport) {
+  if (!inventoryReport || inventoryReport.mode !== "ingredient") return null;
+  const items = inventoryReport.line_items.filter(i => i.gap > 0);
+  if (!items.length) return null;
+
+  const product = (supplier.product || "").toLowerCase();
+
+  // Try to find a matching ingredient
+  const match = items.find(i => {
+    const ingName = i.ingredient_name.toLowerCase();
+    return (
+      ingName.includes(product.split(" ")[0]) ||
+      product.includes(ingName.split(" ")[0]) ||
+      // Special cases
+      (product.includes("bag") && ingName.includes("bag")) ||
+      (product.includes("packaging") && ingName.includes("bag")) ||
+      (product.includes("chocolate") && ingName.includes("chocolate")) ||
+      (product.includes("butter") && ingName.includes("butter")) ||
+      (product.includes("sugar") && ingName.includes("sugar")) ||
+      (product.includes("flour") && ingName.includes("flour")) ||
+      (product.includes("egg") && ingName.includes("egg")) ||
+      (product.includes("co-pack") && false) // co-packers get cases
+    );
+  });
+
+  if (match) return `${match.gap.toFixed(1)} ${match.unit} of ${match.ingredient_name}`;
+
+  // Packaging suppliers get bag count (cases × units per case)
+  if (product.includes("bag") || product.includes("packaging") || product.includes("pouch")) {
+    const totalCases = inventoryReport.total_cases_to_produce;
+    // Default 6 units per case — will be overridden by recipe if available
+    const unitsPerCase = 6;
+    return `${(totalCases * unitsPerCase).toLocaleString()} individual bags`;
+  }
+
+  // Co-packers get cases
+  if (product.includes("co-pack") || product.includes("production")) {
+    return `${inventoryReport.total_cases_to_produce} production cases`;
+  }
+
+  return null;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -12,68 +56,53 @@ export default async function handler(req, res) {
     const totalCases = inventoryReport.total_cases_to_produce;
     if (totalCases === 0) return res.status(200).json({ success: true, data: [] });
 
-    const mode = inventoryReport.mode || "cases";
-    const ingredientItems = mode === "ingredient"
-      ? inventoryReport.line_items.filter(i => i.gap > 0)
-      : [];
-
     const emailPromises = suppliers.slice(0, 3).map(async supplier => {
       const relationshipContext = supplier.notes?.trim()
-        ? `Relationship notes: ${supplier.notes}`
-        : "No prior relationship noted — treat as first contact but keep it warm.";
+        ? `Relationship context: ${supplier.notes}`
+        : "First contact — warm but direct.";
 
-      // Find ingredient gaps relevant to this supplier
-      let orderDetails = "";
-      if (mode === "ingredient" && ingredientItems.length > 0) {
-        const relevant = ingredientItems.filter(i =>
-          i.ingredient_name.toLowerCase().includes(supplier.product?.toLowerCase().split(" ")[0] || "")
-          || supplier.product?.toLowerCase().includes(i.ingredient_name.toLowerCase().split(" ")[0] || "")
-        );
-        if (relevant.length > 0) {
-          orderDetails = relevant.map(i =>
-            `${i.gap.toFixed(1)} ${i.unit} of ${i.ingredient_name}`
-          ).join(", ");
-        } else {
-          orderDetails = `${totalCases} production cases worth of ${supplier.product}`;
-        }
-      } else {
-        orderDetails = `${totalCases} production cases`;
-      }
+      const specificQty = getRelevantQuantity(supplier, inventoryReport)
+        || `${totalCases} production cases`;
 
       const message = await client.messages.create({
         model: "claude-opus-4-6",
-        max_tokens: 400,
+        max_tokens: 350,
         messages: [{
           role: "user",
-          content: `Write a SHORT supplier email. Sound like a real founder texting a vendor, not a corporate letter.
+          content: `Write a SHORT supplier outreach email. Real founder voice — like a text, not a letter.
 
-Sender: ${yourName || "Jack"}, ${brandName || "BYTE'M"}
-Supplier: ${supplier.name}
-Product: ${supplier.product}
-Quantity needed: ${orderDetails}
-Typical unit price: $${supplier.price}
+From: ${yourName || "Jack"} at ${brandName || "BYTE'M"}
+To: ${supplier.name} (${supplier.product})
+Order quantity: ${specificQty}
+Est. unit price: $${supplier.price}
 ${relationshipContext}
 
-Rules — follow exactly:
-- NEVER start with "I hope this message finds you well" or any filler opener
-- NEVER say "I wanted to reach out" or "I am writing to"
-- Open directly with the ask or a brief personal line if you have history
-- Body: 3 sentences MAX
-- Include the specific quantity (in lbs or units as given above)
-- Ask for pricing + lead time in one sentence
-- Close warmly but briefly
-- Sign: "${yourName || "Jack"}\n${brandName || "BYTE'M"}"
+Hard rules:
+- NO "I hope this message finds you well"
+- NO "I wanted to reach out" / "I am writing to"
+- NO "I hope you're doing well"
+- Open with the actual ask or a brief personal reference if you have history
+- Body is 2-3 sentences ONLY
+- One sentence: what you need and how much
+- One sentence: ask for pricing + lead time
+- Optional: one sentence on repeat order potential if relevant
+- Sign off: "${yourName || "Jack"}, ${brandName || "BYTE'M"}"
 
-Return ONLY the email starting with "Subject:" — nothing else.`
+Return ONLY the email. First line must be "Subject: ..." — nothing before or after.`
         }]
       });
+
+      const fullText = message.content[0].text;
+      const lines = fullText.split('\n');
+      const subjectLine = lines.find(l => l.startsWith('Subject:')) || lines[0];
+      const subject = subjectLine.replace('Subject:', '').trim();
 
       return {
         to: supplier.name,
         email: supplier.email,
-        qty: orderDetails,
-        subject: message.content[0].text.split('\n')[0].replace('Subject: ', ''),
-        body: message.content[0].text
+        qty: specificQty,
+        subject,
+        body: fullText
       };
     });
 
