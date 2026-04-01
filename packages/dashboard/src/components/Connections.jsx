@@ -103,7 +103,7 @@ export default function Connections() {
   // -----------------------------------------------------------------------
   // Supabase context
   // -----------------------------------------------------------------------
-  const { settings, saveSettings, saving } = useSettings();
+  const { settings, saveSettings, saving, userEmail } = useSettings();
   const syncedRef = useRef(false); // only sync once on first load
 
   const [activeTab, setActiveTab] = useState("profile");
@@ -117,6 +117,10 @@ export default function Connections() {
   const [emailConnected, setEmailConnected] = useState(() => ls("bytem_emailConnected", false));
   const [emailAddress, setEmailAddress] = useState(() => ls("bytem_emailAddress", ""));
   const [emailSaved, setEmailSaved] = useState(false);
+
+  // Gmail OAuth
+  const [gmailConnected, setGmailConnected] = useState(() => !!settings?.gmail_connected);
+  const [gmailEmail, setGmailEmail] = useState(() => settings?.gmail_email || "");
 
   // Slack
   const [slackConnected, setSlackConnected] = useState(() => ls("bytem_slackConnected", false));
@@ -199,6 +203,8 @@ export default function Connections() {
     if (settings.company_name)     setCompanyName(settings.company_name);
     if (settings.email_connected !== undefined) setEmailConnected(settings.email_connected);
     if (settings.email_address)    setEmailAddress(settings.email_address);
+    if (settings.gmail_connected !== undefined) setGmailConnected(settings.gmail_connected);
+    if (settings.gmail_email)       setGmailEmail(settings.gmail_email);
     if (settings.slack_connected !== undefined) setSlackConnected(settings.slack_connected);
     if (settings.slack_webhook)    setSlackWebhook(settings.slack_webhook);
     if (settings.sheets_connected !== undefined) setSheetsConnected(settings.sheets_connected);
@@ -402,8 +408,44 @@ export default function Connections() {
         {/* CONNECTIONS TAB */}
         {activeTab === "connections" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: 32 }}>
+            {/* Gmail OAuth */}
             <Card>
-              <CardHead icon="📧" title="Email — PO ingestion" description="Forward purchase orders here and the agent reads them automatically" connected={emailConnected}>
+              <CardHead icon="📧" title="Gmail — supplier reply tracking" description="Connect Gmail so the agent reads supplier replies and parses confirmations automatically" connected={gmailConnected}>
+                <StatusDot connected={gmailConnected} />
+              </CardHead>
+              <div style={{ padding: "16px 22px" }}>
+                {gmailConnected ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ padding: "10px 14px", background: "#f0fff4", border: "1px solid #bbf7d0", borderRadius: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: "#166534", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Connected account</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: DARK }}>{gmailEmail || "Gmail connected"}</div>
+                        <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>Monitoring for supplier replies automatically</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { saveSettings({ gmail_connected: false, gmail_email: "", gmail_access_token: "", gmail_refresh_token: "" }); setGmailConnected(false); setGmailEmail(""); }}
+                      style={{ padding: "7px 14px", background: "#fff0f0", border: "1px solid #ffd5d5", borderRadius: 8, fontSize: 12, color: "#c0392b", cursor: "pointer", marginLeft: 12 }}>
+                      disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontSize: 12, color: "#888", marginBottom: 14, lineHeight: 1.6 }}>
+                      When you send a supplier email, the agent watches your Gmail for their reply — it reads it, extracts the confirmed quantity, price, and lead time, and updates your dashboard automatically.
+                    </div>
+                    <a
+                      href={`/api/gmail-auth?email=${encodeURIComponent(userEmail || "")}`}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", background: "#fff", border: "1px solid #ebebeb", borderRadius: 9, fontSize: 13, fontWeight: 600, color: DARK, textDecoration: "none", cursor: "pointer" }}>
+                      <span style={{ fontSize: 16 }}>G</span> Connect Gmail →
+                    </a>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            <Card>
+              <CardHead icon="📬" title="Email — PO ingestion" description="Forward purchase orders here and the agent reads them automatically" connected={emailConnected}>
                 <Toggle on={emailConnected} onChange={v => { setEmailConnected(v); saveSettings({ email_connected: v }); }} />
               </CardHead>
               {emailConnected && (

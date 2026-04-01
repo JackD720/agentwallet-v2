@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { useSettings } from "../context/SettingsContext";
+import SupplierReplies from "./SupplierReplies";
 
 const ACCENT = "#59E2FD";
 const ACCENT_BG = "#f0fcff";
@@ -109,7 +110,7 @@ export default function Dashboard() {
   // -----------------------------------------------------------------------
   // Pull everything from Supabase context instead of raw localStorage
   // -----------------------------------------------------------------------
-  const { settings, saveSettings, yourName, companyName, sheetsUrl, suppliers, recipes, colConfig } = useSettings();
+  const { settings, saveSettings, yourName, companyName, sheetsUrl, suppliers, recipes, colConfig, userEmail } = useSettings();
 
   const [showPOInput, setShowPOInput] = useState(false);
   const [poText, setPoText] = useState("");
@@ -281,6 +282,10 @@ export default function Dashboard() {
           subject: email.subject,
           body: email.body,
           fromName: yourName || "Jack",
+          userEmail: userEmail || "",
+          ingredient: email.ingredient || "",
+          qtyLbs: email.qty_lbs || 0,
+          costEstimate: email.cost_estimate || 0,
         }),
       });
       const data = await res.json();
@@ -540,6 +545,17 @@ export default function Dashboard() {
             </button>
           </>
         )}
+
+        {/* Supplier Replies */}
+        <div style={{ marginTop: 24, marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 16, color: DARK }}>Supplier replies</div>
+              <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>AI-parsed responses from your ingredient orders</div>
+            </div>
+          </div>
+          <SupplierReplies userEmail={userEmail} />
+        </div>
 
         <div style={{ textAlign: "center", padding: "20px 0", fontSize: 10, color: "#ddd" }}>
           byte'm ops · powered by AgentWallet · arXiv:2501.10114
