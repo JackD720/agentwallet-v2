@@ -105,7 +105,56 @@ export default function Dashboard() {
   const [draftedEmails, setDraftedEmails] = useState([]);
   const [sentEmails, setSentEmails] = useState([]);
   const [sendingEmails, setSendingEmails] = useState([]);
+  const [mismatches, setMismatches] = useState([]);
   const [totalVol, setTotalVol] = useState(128400);
+
+  function detectMismatches(poItems) {
+    const warnings = [];
+    try {
+      const recipes = JSON.parse(localStorage.getItem("bytem_recipes") || "[]");
+      if (!recipes.length) return [];
+
+      poItems.forEach(item => {
+        const name = (item.product_name || "").toUpperCase();
+
+        // Extract oz from PO product name e.g. "10/4.7 OZ" or "6/4.23OZ"
+        const ozMatch = name.match(/(\d+\.?\d*)\s*OZ/);
+        const packMatch = name.match(/^(\d+)\//);
+        const poOz = ozMatch ? parseFloat(ozMatch[1]) : null;
+        const poPack = packMatch ? parseInt(packMatch[1]) : null;
+
+        // Find matching recipe by SKU or name
+        const recipe = recipes.find(r =>
+          name.includes(r.sku?.toUpperCase()) ||
+          name.includes(r.name?.toUpperCase().split(" ").slice(-1)[0]) // last word e.g. "CLASSIC"
+        );
+
+        if (recipe) {
+          const settingsOz = parseFloat(recipe.unitSize) || null;
+          const settingsPack = recipe.unitsPerCase || null;
+
+          if (poOz && settingsOz && Math.abs(poOz - settingsOz) > 0.05) {
+            warnings.push({
+              sku: item.sku || recipe.sku,
+              type: "unit_size",
+              po: `${poPack ? poPack + "/" : ""}${poOz} oz`,
+              settings: `${settingsPack}/${settingsOz} oz`,
+              message: `PO shows ${poOz} oz but your recipe has ${settingsOz} oz`
+            });
+          } else if (poPack && settingsPack && poPack !== settingsPack) {
+            warnings.push({
+              sku: item.sku || recipe.sku,
+              type: "case_pack",
+              po: `${poPack}-pack`,
+              settings: `${settingsPack}-pack`,
+              message: `PO shows ${poPack} units/case but your recipe has ${settingsPack}`
+            });
+          }
+        }
+      });
+    } catch {}
+    return warnings;
+  }
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -121,6 +170,7 @@ export default function Dashboard() {
     setParsedPO(null);
     setInventoryReport(null);
     setDraftedEmails([]);
+    setMismatches([]);
 
     try {
       setLoadingStep("Reading PO email...");
@@ -132,6 +182,7 @@ export default function Dashboard() {
       const poData = await poRes.json();
       if (!poData.success) throw new Error(poData.error);
       setParsedPO(poData.data);
+      setMismatches(detectMismatches(poData.data.items || []));
 
       setLoadingStep("Checking inventory...");
       const invRes = await fetch("/api/check-inventory", {
@@ -287,6 +338,26 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Mismatch warning banner */}
+        {hasData && mismatches.length > 0 && (
+          <div style={{ marginBottom: 12, padding: "14px 18px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12, display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <div style={{ fontSize: 18, flexShrink: 0 }}>⚠️</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 4 }}>PO format mismatch detected</div>
+              {mismatches.map((m, i) => (
+                <div key={i} style={{ fontSize: 12, color: "#b45309", marginBottom: 2 }}>
+                  <span style={{ fontFamily: "monospace", background: "#fef3c7", padding: "1px 5px", borderRadius: 4, marginRight: 6 }}>{m.sku}</span>
+                  {m.message} — PO: <strong>{m.po}</strong> vs settings: <strong>{m.settings}</strong>
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: "#b45309", marginTop: 6, opacity: 0.8 }}>
+                Verify quantities before approving supplier emails. Update your recipe settings if your case pack or size has changed.
+              </div>
+            </div>
+            <button onClick={() => setMismatches([])} style={{ fontSize: 12, color: "#b45309", background: "none", border: "none", cursor: "pointer", flexShrink: 0, opacity: 0.6 }}>✕</button>
+          </div>
+        )}
+
         {/* Main content */}
         {hasData && (
           <>
@@ -380,7 +451,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <button onClick={() => { setParsedPO(null); setInventoryReport(null); setDraftedEmails([]); setSentEmails([]); setShowPOInput(true); }}
+            <button onClick={() => { setParsedPO(null); setInventoryReport(null); setDraftedEmails([]); setSentEmails([]); setMismatches([]); setShowPOInput(true); }}
               style={{ width: "100%", padding: 14, background: ACCENT, border: "none", borderRadius: 10, fontFamily: "'Syne', sans-serif", fontSize: 14, fontWeight: 800, color: DARK, cursor: "pointer" }}>
               + process another PO
             </button>
