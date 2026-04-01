@@ -183,59 +183,32 @@ export default function Connections() {
   // Recipes / BOM
   const defaultRecipes = [
     {
-      id: 1, sku: "BB-001", name: "BYTE'M Brownies Classic",
+      id: 1, sku: "SKU-001", name: "Product 1",
       unitsPerCase: 6,
-      bagSizeOz: 4.23,
-      ingredients: [
-        { id: 1, name: "Chocolate Chips - Semi Sweet", qtyPerUnit: 0.094, unit: "lbs" },
-        { id: 2, name: "Cane Sugar", qtyPerUnit: 0.050, unit: "lbs" },
-        { id: 3, name: "Butter, Salted", qtyPerUnit: 0.063, unit: "lbs" },
-        { id: 4, name: "Liquid Eggs - Pasteurized", qtyPerUnit: 0.031, unit: "lbs" },
-        { id: 5, name: "All Purpose Flour", qtyPerUnit: 0.038, unit: "lbs" },
-      ]
-    },
-    {
-      id: 2, sku: "BB-002", name: "BYTE'M Brownies S'Mores",
-      unitsPerCase: 6,
-      bagSizeOz: 4.23,
-      ingredients: [
-        { id: 1, name: "Chocolate Chips - Semi Sweet", qtyPerUnit: 0.078, unit: "lbs" },
-        { id: 2, name: "Cane Sugar", qtyPerUnit: 0.050, unit: "lbs" },
-        { id: 3, name: "Butter, Salted", qtyPerUnit: 0.063, unit: "lbs" },
-        { id: 4, name: "Liquid Eggs - Pasteurized", qtyPerUnit: 0.031, unit: "lbs" },
-        { id: 5, name: "All Purpose Flour", qtyPerUnit: 0.038, unit: "lbs" },
-        { id: 6, name: "Mini Marshmallows", qtyPerUnit: 0.016, unit: "lbs" },
-        { id: 7, name: "Graham Cracker Crumbs", qtyPerUnit: 0.012, unit: "lbs" },
-      ]
-    },
-    {
-      id: 3, sku: "BB-003", name: "BYTE'M Brownies Cookies & Cream",
-      unitsPerCase: 6,
-      bagSizeOz: 4.23,
-      ingredients: [
-        { id: 1, name: "Chocolate Chips - Semi Sweet", qtyPerUnit: 0.078, unit: "lbs" },
-        { id: 2, name: "Cane Sugar", qtyPerUnit: 0.050, unit: "lbs" },
-        { id: 3, name: "Butter, Salted", qtyPerUnit: 0.063, unit: "lbs" },
-        { id: 4, name: "Liquid Eggs - Pasteurized", qtyPerUnit: 0.031, unit: "lbs" },
-        { id: 5, name: "All Purpose Flour", qtyPerUnit: 0.038, unit: "lbs" },
-        { id: 6, name: "Oreo Cookie Pieces", qtyPerUnit: 0.025, unit: "lbs" },
-      ]
+      unitSize: "4.23",
+      unitType: "bag",
+      ingredients: []
     },
   ];
 
   const [recipes, setRecipes] = useState(() => {
     const saved = ls("bytem_recipes", null);
     if (!saved) return defaultRecipes;
-    // migrate old format (qty → qtyPerUnit)
     return saved.map(r => ({
       ...r,
       unitsPerCase: r.unitsPerCase || 6,
-      bagSizeOz: r.bagSizeOz || 4.23,
+      unitSize: r.unitSize || r.bagSizeOz?.toString() || "",
+      unitType: r.unitType || "bag",
       ingredients: (r.ingredients || []).map(ing => ({
         ...ing,
         qtyPerUnit: ing.qtyPerUnit ?? ing.qty ?? 0,
       }))
     }));
+  });
+
+  // PO case count for dynamic "per PO" column
+  const [poCases] = useState(() => {
+    try { return parseInt(localStorage.getItem("bytem_lastPoCases")) || null; } catch { return null; }
   });
   const [activeRecipe, setActiveRecipe] = useState(0);
   const [recipeSaved, setRecipeSaved] = useState(false);
@@ -259,6 +232,27 @@ export default function Connections() {
   function updateUnitsPerCase(recipeIdx, val) {
     const updated = recipes.map((r, ri) => ri !== recipeIdx ? r : { ...r, unitsPerCase: parseInt(val) || 1 });
     saveRecipes(updated);
+  }
+
+  function updateRecipeField(recipeIdx, field, val) {
+    const updated = recipes.map((r, ri) => ri !== recipeIdx ? r : { ...r, [field]: val });
+    saveRecipes(updated);
+  }
+
+  function addSku() {
+    const updated = [...recipes, {
+      id: Date.now(), sku: `SKU-00${recipes.length + 1}`, name: `Product ${recipes.length + 1}`,
+      unitsPerCase: 6, unitSize: "", unitType: "bag", ingredients: []
+    }];
+    saveRecipes(updated);
+    setActiveRecipe(updated.length - 1);
+  }
+
+  function removeSku(recipeIdx) {
+    if (recipes.length <= 1) return;
+    const updated = recipes.filter((_, ri) => ri !== recipeIdx);
+    saveRecipes(updated);
+    setActiveRecipe(Math.max(0, recipeIdx - 1));
   }
 
   function removeIngredient(recipeIdx, ingId) {
@@ -489,75 +483,99 @@ export default function Connections() {
         {/* RECIPES TAB */}
         {activeTab === "recipes" && (
           <div style={{ paddingBottom: 32 }}>
-            {/* SKU selector */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+
+            {/* SKU tabs + add SKU */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
               {recipes.map((r, i) => (
-                <button key={r.id} onClick={() => setActiveRecipe(i)} style={{ padding: "8px 14px", background: activeRecipe === i ? DARK : "#fff", color: activeRecipe === i ? "#fff" : "#888", border: `1px solid ${activeRecipe === i ? DARK : "#ebebeb"}`, borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                  {r.sku}
-                </button>
+                <div key={r.id} style={{ position: "relative" }}>
+                  <button onClick={() => setActiveRecipe(i)} style={{ padding: "8px 14px", background: activeRecipe === i ? DARK : "#fff", color: activeRecipe === i ? "#fff" : "#888", border: `1px solid ${activeRecipe === i ? DARK : "#ebebeb"}`, borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    {r.sku}
+                  </button>
+                  {activeRecipe === i && recipes.length > 1 && (
+                    <button onClick={() => removeSku(i)} style={{ position: "absolute", top: -6, right: -6, width: 16, height: 16, borderRadius: "50%", background: "#ff4d4d", border: "none", color: "#fff", fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>✕</button>
+                  )}
+                </div>
               ))}
+              <button onClick={addSku} style={{ padding: "8px 12px", background: "none", border: "1px dashed #ddd", borderRadius: 8, fontSize: 11, color: "#bbb", cursor: "pointer", fontFamily: "inherit" }}>+ add SKU</button>
             </div>
 
             <Card>
-              {/* SKU header + units per case */}
+              {/* SKU header — all editable */}
               <div style={{ padding: "18px 22px", borderBottom: "1px solid #f5f5f5" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: DARK }}>{recipes[activeRecipe]?.name}</div>
-                    <div style={{ fontSize: 12, color: "#bbb", marginTop: 2 }}>Bill of materials — enter quantities per finished bag</div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>SKU code</div>
+                    <input value={recipes[activeRecipe]?.sku || ""} onChange={e => updateRecipeField(activeRecipe, "sku", e.target.value)}
+                      placeholder="e.g. SKU-001" style={{ width: "100%", padding: "8px 10px", border: "1px solid #ebebeb", borderRadius: 7, fontSize: 13, fontFamily: "inherit", color: DARK, background: "#fafafa" }} />
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#f8f8f8", border: "1px solid #ebebeb", borderRadius: 9, padding: "8px 14px" }}>
-                    <div style={{ fontSize: 11, color: "#888" }}>Bag size</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{recipes[activeRecipe]?.bagSizeOz} oz</div>
-                    <div style={{ width: 1, height: 16, background: "#ebebeb" }} />
-                    <div style={{ fontSize: 11, color: "#888" }}>Units / case</div>
-                    <input
-                      type="number"
-                      value={recipes[activeRecipe]?.unitsPerCase}
-                      onChange={e => updateUnitsPerCase(activeRecipe, e.target.value)}
-                      style={{ width: 40, padding: "3px 6px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 13, fontWeight: 700, color: DARK, fontFamily: "inherit", textAlign: "center", background: "#fff" }}
-                    />
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Product name</div>
+                    <input value={recipes[activeRecipe]?.name || ""} onChange={e => updateRecipeField(activeRecipe, "name", e.target.value)}
+                      placeholder="e.g. Classic Brownie 4oz" style={{ width: "100%", padding: "8px 10px", border: "1px solid #ebebeb", borderRadius: 7, fontSize: 13, fontFamily: "inherit", color: DARK, background: "#fafafa" }} />
                   </div>
+                </div>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Unit type</div>
+                    <select value={recipes[activeRecipe]?.unitType || "bag"} onChange={e => updateRecipeField(activeRecipe, "unitType", e.target.value)}
+                      style={{ padding: "8px 10px", border: "1px solid #ebebeb", borderRadius: 7, fontSize: 13, fontFamily: "inherit", color: DARK, background: "#fafafa" }}>
+                      {["bag", "can", "bottle", "jar", "box", "pouch", "sachet", "pack", "unit"].map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Unit size</div>
+                    <input value={recipes[activeRecipe]?.unitSize || ""} onChange={e => updateRecipeField(activeRecipe, "unitSize", e.target.value)}
+                      placeholder="e.g. 4.23 oz" style={{ width: 120, padding: "8px 10px", border: "1px solid #ebebeb", borderRadius: 7, fontSize: 13, fontFamily: "inherit", color: DARK, background: "#fafafa" }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{(recipes[activeRecipe]?.unitType || "unit").charAt(0).toUpperCase() + (recipes[activeRecipe]?.unitType || "unit").slice(1)}s per case</div>
+                    <input type="number" value={recipes[activeRecipe]?.unitsPerCase || 6} onChange={e => updateUnitsPerCase(activeRecipe, e.target.value)}
+                      style={{ width: 70, padding: "8px 10px", border: "1px solid #ebebeb", borderRadius: 7, fontSize: 13, fontFamily: "inherit", color: DARK, background: "#fafafa", textAlign: "center" }} />
+                  </div>
+                  {poCases && (
+                    <div style={{ padding: "8px 12px", background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}`, borderRadius: 7 }}>
+                      <div style={{ fontSize: 10, color: "#0a7a9a", fontWeight: 600 }}>Active PO</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{poCases} cases</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Column headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 55px 120px 120px 36px", gap: 8, padding: "10px 22px", background: "#f8f8f8", borderBottom: "1px solid #ebebeb" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 60px 130px 130px 36px", gap: 8, padding: "10px 22px", background: "#f8f8f8", borderBottom: "1px solid #ebebeb" }}>
                 <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Ingredient</div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Per bag</div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Per {recipes[activeRecipe]?.unitType || "unit"}</div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Unit</div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: ACCENT, textTransform: "uppercase", letterSpacing: "0.07em" }}>Per case ×{recipes[activeRecipe]?.unitsPerCase}</div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Per 144 cases</div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                  {poCases ? `Per PO (${poCases} cases)` : "Per PO"}
+                </div>
                 <div />
               </div>
 
               {/* Ingredient rows */}
               <div style={{ padding: "0 22px" }}>
-                {recipes[activeRecipe]?.ingredients.map(ing => {
-                  const perCase = (ing.qtyPerUnit * recipes[activeRecipe].unitsPerCase);
-                  const per144 = (perCase * 144);
+                {(recipes[activeRecipe]?.ingredients || []).length === 0 && (
+                  <div style={{ padding: "24px 0", textAlign: "center", color: "#ccc", fontSize: 13 }}>
+                    No ingredients yet — add one below
+                  </div>
+                )}
+                {(recipes[activeRecipe]?.ingredients || []).map(ing => {
+                  const perCase = ing.qtyPerUnit * (recipes[activeRecipe]?.unitsPerCase || 1);
+                  const perPO = poCases ? perCase * poCases : null;
                   return (
-                    <div key={ing.id} style={{ display: "grid", gridTemplateColumns: "1fr 70px 55px 120px 120px 36px", gap: 8, padding: "10px 0", borderBottom: "1px solid #f8f8f8", alignItems: "center" }}>
+                    <div key={ing.id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 60px 130px 130px 36px", gap: 8, padding: "10px 0", borderBottom: "1px solid #f8f8f8", alignItems: "center" }}>
                       <div style={{ fontSize: 13, color: DARK }}>{ing.name}</div>
-                      <input
-                        type="number"
-                        step="0.001"
-                        value={ing.qtyPerUnit}
+                      <input type="number" step="0.001" value={ing.qtyPerUnit}
                         onChange={e => updateIngredient(activeRecipe, ing.id, "qtyPerUnit", e.target.value)}
-                        style={{ width: "100%", padding: "5px 6px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 12, color: DARK, fontFamily: "inherit", background: "#fafafa" }}
-                      />
-                      <select
-                        value={ing.unit}
-                        onChange={e => updateIngredient(activeRecipe, ing.id, "unit", e.target.value)}
-                        style={{ width: "100%", padding: "5px 4px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 11, color: DARK, fontFamily: "inherit", background: "#fafafa" }}
-                      >
+                        style={{ width: "100%", padding: "5px 6px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 12, color: DARK, fontFamily: "inherit", background: "#fafafa" }} />
+                      <select value={ing.unit} onChange={e => updateIngredient(activeRecipe, ing.id, "unit", e.target.value)}
+                        style={{ width: "100%", padding: "5px 4px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 11, color: DARK, fontFamily: "inherit", background: "#fafafa" }}>
                         {["lbs", "oz", "kg", "g", "gal", "qt", "L", "ml", "units"].map(u => <option key={u}>{u}</option>)}
                       </select>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0a7a9a" }}>
-                        {perCase.toFixed(3)} {ing.unit}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#bbb" }}>
-                        {per144.toFixed(1)} {ing.unit}
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#0a7a9a" }}>{perCase.toFixed(3)} {ing.unit}</div>
+                      <div style={{ fontSize: 13, color: perPO ? DARK : "#ddd", fontWeight: perPO ? 500 : 400 }}>
+                        {perPO ? `${perPO.toFixed(1)} ${ing.unit}` : "—"}
                       </div>
                       <button onClick={() => removeIngredient(activeRecipe, ing.id)} style={{ fontSize: 11, color: "#ff4d4d", background: "#fff0f0", border: "1px solid #ffd5d5", borderRadius: 6, padding: "4px 6px", cursor: "pointer" }}>✕</button>
                     </div>
@@ -565,20 +583,22 @@ export default function Connections() {
                 })}
 
                 {/* Totals row */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 55px 120px 120px 36px", gap: 8, padding: "12px 0", borderTop: "2px solid #f0f0f0", marginTop: 4 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#888" }}>Total (lbs only)</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>
-                    {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + i.qtyPerUnit, 0).toFixed(3)}
+                {(recipes[activeRecipe]?.ingredients || []).length > 0 && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 60px 130px 130px 36px", gap: 8, padding: "12px 0", borderTop: "2px solid #f0f0f0", marginTop: 4 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#888" }}>Total (lbs)</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>
+                      {(recipes[activeRecipe]?.ingredients || []).filter(i => i.unit === "lbs").reduce((s, i) => s + i.qtyPerUnit, 0).toFixed(3)}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#bbb" }}>lbs</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0a7a9a" }}>
+                      {(recipes[activeRecipe]?.ingredients || []).filter(i => i.unit === "lbs").reduce((s, i) => s + (i.qtyPerUnit * (recipes[activeRecipe]?.unitsPerCase || 1)), 0).toFixed(3)} lbs
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: poCases ? DARK : "#ddd" }}>
+                      {poCases ? `${(recipes[activeRecipe]?.ingredients || []).filter(i => i.unit === "lbs").reduce((s, i) => s + (i.qtyPerUnit * (recipes[activeRecipe]?.unitsPerCase || 1) * poCases), 0).toFixed(1)} lbs` : "—"}
+                    </div>
+                    <div />
                   </div>
-                  <div style={{ fontSize: 11, color: "#bbb" }}>lbs</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0a7a9a" }}>
-                    {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + (i.qtyPerUnit * recipes[activeRecipe].unitsPerCase), 0).toFixed(3)} lbs
-                  </div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#bbb" }}>
-                    {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + (i.qtyPerUnit * recipes[activeRecipe].unitsPerCase * 144), 0).toFixed(1)} lbs
-                  </div>
-                  <div />
-                </div>
+                )}
               </div>
 
               {/* Add ingredient form */}
@@ -588,7 +608,7 @@ export default function Connections() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 80px", gap: 8, marginBottom: 8 }}>
                     <input placeholder="Ingredient name" value={newIngredient.name} onChange={e => setNewIngredient(p => ({ ...p, name: e.target.value }))}
                       style={{ padding: "8px 10px", border: `1px solid ${ACCENT_BORDER}`, borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }} />
-                    <input type="number" step="0.001" placeholder="Qty per bag" value={newIngredient.qty} onChange={e => setNewIngredient(p => ({ ...p, qty: e.target.value }))}
+                    <input type="number" step="0.001" placeholder={`Qty per ${recipes[activeRecipe]?.unitType || "unit"}`} value={newIngredient.qty} onChange={e => setNewIngredient(p => ({ ...p, qty: e.target.value }))}
                       style={{ padding: "8px 10px", border: `1px solid ${ACCENT_BORDER}`, borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }} />
                     <select value={newIngredient.unit} onChange={e => setNewIngredient(p => ({ ...p, unit: e.target.value }))}
                       style={{ padding: "8px 10px", border: `1px solid ${ACCENT_BORDER}`, borderRadius: 7, fontSize: 12, fontFamily: "inherit", background: "#fff" }}>
@@ -613,30 +633,40 @@ export default function Connections() {
               </div>
             </Card>
 
-            {/* Cross-SKU summary */}
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-                Total ingredients for a full 144-case run (all 3 SKUs)
-              </div>
-              <Card>
-                <div style={{ padding: "0 22px" }}>
-                  {(() => {
-                    const allIngs = {};
-                    recipes.forEach(r => r.ingredients.forEach(ing => {
-                      const key = `${ing.name}__${ing.unit}`;
-                      if (!allIngs[key]) allIngs[key] = { name: ing.name, unit: ing.unit, total: 0 };
-                      allIngs[key].total += ing.qtyPerUnit * r.unitsPerCase * 144;
-                    }));
-                    return Object.values(allIngs).map((ing, i, arr) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < arr.length - 1 ? "1px solid #f5f5f5" : "none" }}>
-                        <span style={{ fontSize: 13, color: DARK }}>{ing.name}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{ing.total.toFixed(1)} <span style={{ fontWeight: 400, color: "#bbb" }}>{ing.unit}</span></span>
-                      </div>
-                    ));
-                  })()}
+            {/* Cross-SKU summary — only shows if PO is active */}
+            {poCases ? (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+                  Total ingredients for active PO ({poCases} cases across all SKUs)
                 </div>
-              </Card>
-            </div>
+                <Card>
+                  <div style={{ padding: "0 22px" }}>
+                    {(() => {
+                      const allIngs = {};
+                      recipes.forEach(r => (r.ingredients || []).forEach(ing => {
+                        const key = `${ing.name}__${ing.unit}`;
+                        if (!allIngs[key]) allIngs[key] = { name: ing.name, unit: ing.unit, total: 0 };
+                        allIngs[key].total += ing.qtyPerUnit * (r.unitsPerCase || 1) * poCases;
+                      }));
+                      const vals = Object.values(allIngs);
+                      if (vals.length === 0) return <div style={{ padding: "16px 0", color: "#ccc", fontSize: 13 }}>No ingredients defined yet.</div>;
+                      return vals.map((ing, i, arr) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < arr.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                          <span style={{ fontSize: 13, color: DARK }}>{ing.name}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: DARK }}>{ing.total.toFixed(1)} <span style={{ fontWeight: 400, color: "#bbb" }}>{ing.unit}</span></span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </Card>
+              </div>
+            ) : (
+              <div style={{ marginTop: 16, padding: "16px 20px", background: "#f8f8f8", borderRadius: 10, border: "1px solid #ebebeb" }}>
+                <div style={{ fontSize: 12, color: "#bbb", textAlign: "center" }}>
+                  Paste a PO on the dashboard to see ingredient quantities for that order
+                </div>
+              </div>
+            )}
           </div>
         )}
 

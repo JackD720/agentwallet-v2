@@ -142,6 +142,7 @@ export default function Dashboard() {
       const invData = await invRes.json();
       if (!invData.success) throw new Error(invData.error);
       setInventoryReport(invData.data);
+      try { localStorage.setItem("bytem_lastPoCases", invData.data.total_cases_to_produce); } catch {}
 
       setLoadingStep("Drafting supplier emails...");
       const suppliers = getSuppliers();
