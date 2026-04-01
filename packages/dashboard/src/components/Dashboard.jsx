@@ -53,7 +53,39 @@ function StatusBadge({ status }) {
   );
 }
 
-function InventoryBar({ item }) {
+function InventoryBar({ item, mode }) {
+  // Ingredient mode
+  if (mode === "ingredient") {
+    const pct = item.needed > 0 ? Math.round((item.on_hand / item.needed) * 100) : 0;
+    const barColor = item.status === "sufficient" ? "#2ecc71" : pct < 25 ? "#ff4d4d" : "#f59e0b";
+    return (
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.ingredient_name}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 8,
+            background: item.status === "sufficient" ? "#f0fff4" : "#fff8ed",
+            border: `1px solid ${item.status === "sufficient" ? "#bbf7d0" : "#fde8b0"}`,
+            color: item.status === "sufficient" ? "#166534" : "#92580a" }}>
+            {item.status === "sufficient" ? "sufficient" : `order ${item.gap.toFixed(1)} ${item.unit}`}
+          </span>
+        </div>
+        <div style={{ height: 4, background: "#f0f0f0", borderRadius: 2, overflow: "hidden", marginBottom: 5 }}>
+          <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: barColor, borderRadius: 2, transition: "width 1s cubic-bezier(.4,0,.2,1)" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#bbb" }}>
+          <span>{item.on_hand.toFixed(1)} {item.unit} on hand</span>
+          <span>{item.needed.toFixed(1)} {item.unit} needed</span>
+        </div>
+        {item.cost_to_order > 0 && (
+          <div style={{ fontSize: 11, color: "#0a7a9a", marginTop: 3 }}>
+            Est. cost to order gap: <strong>${item.cost_to_order.toFixed(2)}</strong>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Case mode (fallback)
   const pct = item.cases_ordered > 0 ? Math.round((item.cases_on_hand / item.cases_ordered) * 100) : 0;
   const barColor = pct < 25 ? "#ff4d4d" : ACCENT;
   return (
@@ -184,11 +216,30 @@ export default function Dashboard() {
       setParsedPO(poData.data);
       setMismatches(detectMismatches(poData.data.items || []));
 
-      setLoadingStep("Checking inventory...");
+      // Fetch ingredient inventory from Google Sheets if connected
+      setLoadingStep("Fetching ingredient inventory...");
+      let ingredientInventory = {};
+      let recipes = [];
+      try {
+        const sheetUrl = localStorage.getItem("bytem_sheetsUrl");
+        const savedRecipes = localStorage.getItem("bytem_recipes");
+        recipes = savedRecipes ? JSON.parse(savedRecipes) : [];
+        if (sheetUrl && sheetUrl.includes("docs.google.com")) {
+          const sheetRes = await fetch("/api/fetch-inventory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sheetUrl }),
+          });
+          const sheetData = await sheetRes.json();
+          if (sheetData.success) ingredientInventory = sheetData.data;
+        }
+      } catch {}
+
+      setLoadingStep("Calculating ingredient gaps...");
       const invRes = await fetch("/api/check-inventory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parsedPO: poData.data, inventory: defaultInventory }),
+        body: JSON.stringify({ parsedPO: poData.data, inventory: ingredientInventory, recipes }),
       });
       const invData = await invRes.json();
       if (!invData.success) throw new Error(invData.error);
@@ -386,9 +437,20 @@ export default function Dashboard() {
               </div>
 
               <div style={cardStyle}>
-                <div style={cardHeadStyle}><CardLabel>Inventory check</CardLabel><Tag>auto-calculated</Tag></div>
+                <div style={cardHeadStyle}>
+                  <CardLabel>Ingredient inventory</CardLabel>
+                  <Tag>{inventoryReport.mode === "ingredient" ? "from google sheets" : "auto-calculated"}</Tag>
+                </div>
                 <div style={{ padding: "16px 18px" }}>
-                  {inventoryReport.line_items.map((item, i) => <InventoryBar key={i} item={item} />)}
+                  {inventoryReport.line_items.map((item, i) => (
+                    <InventoryBar key={i} item={item} mode={inventoryReport.mode} />
+                  ))}
+                  {inventoryReport.mode === "ingredient" && inventoryReport.total_cost > 0 && (
+                    <div style={{ padding: "10px 12px", background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}`, borderRadius: 8, marginTop: 8 }}>
+                      <div style={{ fontSize: 10, color: "#0a7a9a", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Total estimated ingredient cost</div>
+                      <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, color: DARK }}>${inventoryReport.total_cost.toLocaleString()}</div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -426,23 +488,45 @@ export default function Dashboard() {
               <div style={cardStyle}>
                 <div style={cardHeadStyle}><CardLabel>Payment governance</CardLabel><Tag>AgentWallet</Tag></div>
                 <div style={{ padding: "0 18px" }}>
-                  {inventoryReport.line_items.map((item, i) => {
-                    const amount = item.cases_to_produce * 8;
-                    const status = amount > 10000 ? "blocked" : amount > 5000 ? "pending" : "approved";
-                    return (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < inventoryReport.line_items.length - 1 ? "1px solid #f5f5f5" : "none" }}>
-                        <PayIcon status={status} />
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.product_name}</div>
-                          <div style={{ fontSize: 11, color: "#bbb" }}>{item.cases_to_produce} cases to produce</div>
+                  {inventoryReport.mode === "ingredient" ? (
+                    // Ingredient mode — show per-ingredient payments
+                    inventoryReport.line_items.filter(i => i.gap > 0).map((item, i, arr) => {
+                      const amount = item.cost_to_order;
+                      const status = amount > 10000 ? "blocked" : amount > 5000 ? "pending" : "approved";
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < arr.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                          <PayIcon status={status} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.ingredient_name}</div>
+                            <div style={{ fontSize: 11, color: "#bbb" }}>{item.gap.toFixed(1)} {item.unit} to order @ ${item.price_per_lb}/lb</div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 15, color: DARK, marginBottom: 4 }}>${amount.toLocaleString()}</div>
+                            <StatusBadge status={status} />
+                          </div>
                         </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 15, color: DARK, marginBottom: 4 }}>${amount.toLocaleString()}</div>
-                          <StatusBadge status={status} />
+                      );
+                    })
+                  ) : (
+                    // Case mode fallback
+                    inventoryReport.line_items.map((item, i) => {
+                      const amount = item.cases_to_produce * 8;
+                      const status = amount > 10000 ? "blocked" : amount > 5000 ? "pending" : "approved";
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: i < inventoryReport.line_items.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                          <PayIcon status={status} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: DARK }}>{item.product_name}</div>
+                            <div style={{ fontSize: 11, color: "#bbb" }}>{item.cases_to_produce} cases to produce</div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 15, color: DARK, marginBottom: 4 }}>${amount.toLocaleString()}</div>
+                            <StatusBadge status={status} />
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                   <div style={{ margin: "12px 0", padding: "10px 12px", background: "#f8f8f8", borderRadius: 8 }}>
                     <div style={{ fontSize: 10, color: "#ccc", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>Rules enforced</div>
                     <div style={{ fontSize: 12, color: "#999" }}>Max $10K per transaction · $25K monthly per supplier · approval above $5K</div>
