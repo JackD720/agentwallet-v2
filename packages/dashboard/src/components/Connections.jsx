@@ -223,7 +223,20 @@ export default function Connections() {
     },
   ];
 
-  const [recipes, setRecipes] = useState(() => ls("bytem_recipes", defaultRecipes));
+  const [recipes, setRecipes] = useState(() => {
+    const saved = ls("bytem_recipes", null);
+    if (!saved) return defaultRecipes;
+    // migrate old format (qty → qtyPerUnit)
+    return saved.map(r => ({
+      ...r,
+      unitsPerCase: r.unitsPerCase || 6,
+      bagSizeOz: r.bagSizeOz || 4.23,
+      ingredients: (r.ingredients || []).map(ing => ({
+        ...ing,
+        qtyPerUnit: ing.qtyPerUnit ?? ing.qty ?? 0,
+      }))
+    }));
+  });
   const [activeRecipe, setActiveRecipe] = useState(0);
   const [recipeSaved, setRecipeSaved] = useState(false);
   const [newIngredient, setNewIngredient] = useState({ name: "", qty: "", unit: "lbs" });
