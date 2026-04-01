@@ -522,9 +522,10 @@ export default function Connections() {
               </div>
 
               {/* Column headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 110px 36px", gap: 8, padding: "10px 22px", background: "#f8f8f8", borderBottom: "1px solid #ebebeb" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 55px 120px 120px 36px", gap: 8, padding: "10px 22px", background: "#f8f8f8", borderBottom: "1px solid #ebebeb" }}>
                 <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Ingredient</div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Per bag</div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Unit</div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: ACCENT, textTransform: "uppercase", letterSpacing: "0.07em" }}>Per case ×{recipes[activeRecipe]?.unitsPerCase}</div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: "#bbb", textTransform: "uppercase", letterSpacing: "0.07em" }}>Per 144 cases</div>
                 <div />
@@ -536,24 +537,22 @@ export default function Connections() {
                   const perCase = (ing.qtyPerUnit * recipes[activeRecipe].unitsPerCase);
                   const per144 = (perCase * 144);
                   return (
-                    <div key={ing.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 110px 36px", gap: 8, padding: "10px 0", borderBottom: "1px solid #f8f8f8", alignItems: "center" }}>
+                    <div key={ing.id} style={{ display: "grid", gridTemplateColumns: "1fr 70px 55px 120px 120px 36px", gap: 8, padding: "10px 0", borderBottom: "1px solid #f8f8f8", alignItems: "center" }}>
                       <div style={{ fontSize: 13, color: DARK }}>{ing.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <input
-                          type="number"
-                          step="0.001"
-                          value={ing.qtyPerUnit}
-                          onChange={e => updateIngredient(activeRecipe, ing.id, "qtyPerUnit", e.target.value)}
-                          style={{ width: 60, padding: "5px 6px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 12, color: DARK, fontFamily: "inherit", background: "#fafafa" }}
-                        />
-                        <select
-                          value={ing.unit}
-                          onChange={e => updateIngredient(activeRecipe, ing.id, "unit", e.target.value)}
-                          style={{ padding: "5px 4px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 11, color: DARK, fontFamily: "inherit", background: "#fafafa" }}
-                        >
-                          {["lbs", "oz", "kg", "g", "gal", "qt", "L", "ml", "units"].map(u => <option key={u}>{u}</option>)}
-                        </select>
-                      </div>
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={ing.qtyPerUnit}
+                        onChange={e => updateIngredient(activeRecipe, ing.id, "qtyPerUnit", e.target.value)}
+                        style={{ width: "100%", padding: "5px 6px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 12, color: DARK, fontFamily: "inherit", background: "#fafafa" }}
+                      />
+                      <select
+                        value={ing.unit}
+                        onChange={e => updateIngredient(activeRecipe, ing.id, "unit", e.target.value)}
+                        style={{ width: "100%", padding: "5px 4px", border: "1px solid #ebebeb", borderRadius: 6, fontSize: 11, color: DARK, fontFamily: "inherit", background: "#fafafa" }}
+                      >
+                        {["lbs", "oz", "kg", "g", "gal", "qt", "L", "ml", "units"].map(u => <option key={u}>{u}</option>)}
+                      </select>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "#0a7a9a" }}>
                         {perCase.toFixed(3)} {ing.unit}
                       </div>
@@ -566,13 +565,14 @@ export default function Connections() {
                 })}
 
                 {/* Totals row */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px 110px 36px", gap: 8, padding: "12px 0", borderTop: "2px solid #f0f0f0", marginTop: 4 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 70px 55px 120px 120px 36px", gap: 8, padding: "12px 0", borderTop: "2px solid #f0f0f0", marginTop: 4 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#888" }}>Total (lbs only)</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: DARK }}>
-                    {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + i.qtyPerUnit, 0).toFixed(3)} lbs
+                    {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + i.qtyPerUnit, 0).toFixed(3)}
                   </div>
+                  <div style={{ fontSize: 11, color: "#bbb" }}>lbs</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#0a7a9a" }}>
-                    {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + (i.qtyPerUnit * recipes[activeRecipe].unitsPerCase), 0).toFixed(2)} lbs
+                    {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + (i.qtyPerUnit * recipes[activeRecipe].unitsPerCase), 0).toFixed(3)} lbs
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#bbb" }}>
                     {recipes[activeRecipe]?.ingredients.filter(i => i.unit === "lbs").reduce((s, i) => s + (i.qtyPerUnit * recipes[activeRecipe].unitsPerCase * 144), 0).toFixed(1)} lbs
