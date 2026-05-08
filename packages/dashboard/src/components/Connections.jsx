@@ -104,7 +104,7 @@ export default function Connections() {
   // -----------------------------------------------------------------------
   // Supabase context
   // -----------------------------------------------------------------------
-  const { settings, saveSettings, saving, userEmail, refreshSettings, signOut } = useSettings();
+  const { settings, saveSettings, saving, userEmail, refreshSettings, signOut, yourName: contextYourName } = useSettings();
   const syncedRef = useRef(false); // only sync once on first load
 
   const [activeTab, setActiveTab] = useState("profile");
@@ -392,7 +392,7 @@ export default function Connections() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <a href="/" style={{ fontSize: 12, color: "#bbb", textDecoration: "none", fontWeight: 500 }}>← back to dashboard</a>
-            <AccountMenu email={userEmail} onSignOut={signOut} />
+            <AccountMenu name={contextYourName} email={userEmail} onSignOut={signOut} />
           </div>
         </div>
 

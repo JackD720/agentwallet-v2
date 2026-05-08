@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 
 const DARK = "#1a1a1a";
 
-export default function AccountMenu({ email, onSignOut }) {
+export default function AccountMenu({ email, name, onSignOut }) {
   const [open, setOpen] = useState(false);
 
   // Close on outside click / escape
@@ -24,11 +24,19 @@ export default function AccountMenu({ email, onSignOut }) {
     };
   }, [open]);
 
-  // Two-letter avatar from the email's local part.
-  const initials = (email || "?")
-    .split("@")[0]
-    .slice(0, 2)
-    .toUpperCase();
+  // Derive initials: prefer name (e.g. "Test User" → "TU"), fall back to
+  // email local-part (e.g. "jack+test1" → "JA"). Two letters max.
+  const initials = (() => {
+    const trimmed = (name || "").trim();
+    if (trimmed) {
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+      return trimmed.slice(0, 2).toUpperCase();
+    }
+    return (email || "?").split("@")[0].slice(0, 2).toUpperCase();
+  })();
 
   return (
     <div data-account-menu style={{ position: "relative" }}>

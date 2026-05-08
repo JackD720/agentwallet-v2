@@ -55,6 +55,17 @@ export default function Login({ onAuthenticated }) {
         // Clean the token out of the URL before handing off.
         window.history.replaceState(null, "", window.location.pathname);
         onAuthenticated(data.email);
+        // Belt-and-suspenders: when the SAME user re-authenticates (e.g.
+        // clicks a fresh magic link while already signed in), React bails
+        // out of the identical state update and we'd be stuck on the
+        // "verifying" view forever. Force a clean reload after a beat to
+        // guarantee the app re-renders into the correct gate.
+        setTimeout(() => {
+          if (window.location.hash === "" || !window.location.hash.startsWith("#login")) {
+            // Hash already cleared, but spinner still showing — hard reload.
+            window.location.replace(window.location.pathname);
+          }
+        }, 250);
       } catch (err) {
         console.error("verify failed:", err);
         setVerifyError("Network error during verification");

@@ -347,7 +347,7 @@ export default function Dashboard() {
               <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#2ecc71", animation: "pulse 2s ease-in-out infinite" }} />
               automation active
             </div>
-            <AccountMenu email={userEmail} onSignOut={signOut} />
+            <AccountMenu name={yourName} email={userEmail} onSignOut={signOut} />
           </div>
         </div>
 
