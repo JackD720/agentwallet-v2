@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSettings } from "../context/SettingsContext";
+import AccountMenu from "./AccountMenu";
 
 const ACCENT = "#59E2FD";
 const ACCENT_BG = "#f0fcff";
@@ -103,7 +104,7 @@ export default function Connections() {
   // -----------------------------------------------------------------------
   // Supabase context
   // -----------------------------------------------------------------------
-  const { settings, saveSettings, saving, userEmail, refreshSettings } = useSettings();
+  const { settings, saveSettings, saving, userEmail, refreshSettings, signOut } = useSettings();
   const syncedRef = useRef(false); // only sync once on first load
 
   const [activeTab, setActiveTab] = useState("profile");
@@ -389,7 +390,10 @@ export default function Connections() {
               <div style={{ fontSize: 10, color: "#ccc", letterSpacing: "0.08em", textTransform: "uppercase" }}>settings & connections</div>
             </div>
           </div>
-          <a href="/" style={{ fontSize: 12, color: "#bbb", textDecoration: "none", fontWeight: 500 }}>← back to dashboard</a>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <a href="/" style={{ fontSize: 12, color: "#bbb", textDecoration: "none", fontWeight: 500 }}>← back to dashboard</a>
+            <AccountMenu email={userEmail} onSignOut={signOut} />
+          </div>
         </div>
 
         {/* Tabs */}

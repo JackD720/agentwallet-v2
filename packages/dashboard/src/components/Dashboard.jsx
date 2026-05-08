@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import { useSettings } from "../context/SettingsContext";
 import SupplierReplies from "./SupplierReplies";
+import AccountMenu from "./AccountMenu";
 
 const ACCENT = "#59E2FD";
 const ACCENT_BG = "#f0fcff";
@@ -110,7 +111,7 @@ export default function Dashboard() {
   // -----------------------------------------------------------------------
   // Pull everything from Supabase context instead of raw localStorage
   // -----------------------------------------------------------------------
-  const { settings, saveSettings, yourName, companyName, sheetsUrl, suppliers, recipes, colConfig, userEmail } = useSettings();
+  const { settings, saveSettings, yourName, companyName, sheetsUrl, suppliers, recipes, colConfig, userEmail, signOut } = useSettings();
 
   const [showPOInput, setShowPOInput] = useState(false);
   const [poText, setPoText] = useState("");
@@ -247,7 +248,7 @@ export default function Dashboard() {
           body: JSON.stringify({
             inventoryReport: invData.data,
             suppliers: activeSuppliers,
-            brandName: companyName || "BYTE'M Brownies",
+            brandName: companyName || "",
             yourName: yourName || "Jack",
           }),
         });
@@ -346,6 +347,7 @@ export default function Dashboard() {
               <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#2ecc71", animation: "pulse 2s ease-in-out infinite" }} />
               automation active
             </div>
+            <AccountMenu email={userEmail} onSignOut={signOut} />
           </div>
         </div>
 

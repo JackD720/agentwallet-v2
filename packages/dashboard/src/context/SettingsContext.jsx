@@ -1,13 +1,16 @@
 // src/context/SettingsContext.jsx
-// v2.5 changes:
-// - DEFAULT_SUPPLIERS = [] (no hardcoded Hershey's etc for new users)
-// - Added ingredient_col, price_col, inventory_col, header_row fields
+// Session 4 changes:
+// - registerUser → split into setSession(email) (sets active user) and
+//   completeOnboarding(patch) (writes user-entered fields without nuking row).
+// - The first-time-load path no longer overwrites existing Supabase rows.
+//   If a row exists, we just load it. If it doesn't, we INSERT a default row
+//   so subsequent OAuth PATCHes have something to update.
+// - Default Recipes / SKUs are now empty arrays — no BB-001 leak.
 
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 
 const SettingsContext = createContext(null);
 
-// No default suppliers — new users start fresh and add their own
 const DEFAULT_SETTINGS = {
   your_name: "",
   company_name: "",
@@ -30,7 +33,7 @@ const DEFAULT_SETTINGS = {
   max_monthly: "25000",
   approval_threshold: "5000",
   auto_approve: true,
-  suppliers: [],   // ← empty, not hardcoded defaults
+  suppliers: [],
   recipes: [],
   last_po_cases: null,
 };
@@ -41,66 +44,59 @@ function lsGet(key, fallback) {
     return v !== null ? JSON.parse(v) : fallback;
   } catch { return fallback; }
 }
-
 function lsSet(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
-function migrateFromLegacyLocalStorage() {
-  return {
-    your_name: localStorage.getItem("bytem_yourName") || "",
-    company_name: localStorage.getItem("bytem_companyName") || "",
-    email_connected: lsGet("bytem_emailConnected", false),
-    email_address: localStorage.getItem("bytem_emailAddress") || "",
-    slack_connected: lsGet("bytem_slackConnected", false),
-    slack_webhook: localStorage.getItem("bytem_slackWebhook") || "",
-    sheets_connected: lsGet("bytem_sheetsConnected", false),
-    sheets_url: localStorage.getItem("bytem_sheetsUrl") || "",
-    ingredient_col: "B",
-    price_col: "C",
-    inventory_col: "F",
-    header_row: "4",
-    kaizntree_connected: lsGet("bytem_kaizntreeConnected", false),
-    kaizntree_key: localStorage.getItem("bytem_kaizntreeKey") || "",
-    max_per_txn: localStorage.getItem("bytem_maxPerTxn") || "10000",
-    max_monthly: localStorage.getItem("bytem_maxMonthly") || "25000",
-    approval_threshold: localStorage.getItem("bytem_approvalThreshold") || "5000",
-    auto_approve: lsGet("bytem_autoApprove", true),
-    // Only migrate legacy suppliers if they were user-customized (more than 3 or different)
-    suppliers: lsGet("bytem_suppliers", []),
-    recipes: lsGet("bytem_recipes", []),
-    last_po_cases: lsGet("bytem_lastPoCases", null),
-  };
+// Treat the user as "onboarded" once they've supplied a name or company.
+// This is what gates the dashboard-vs-onboarding view.
+export function isOnboarded(settings) {
+  if (!settings) return false;
+  return Boolean(
+    (settings.your_name && settings.your_name.trim()) ||
+    (settings.company_name && settings.company_name.trim())
+  );
 }
 
 export function SettingsProvider({ children }) {
-  const [userEmail, setUserEmail] = useState(() => localStorage.getItem("bytem_user_email") || null);
+  const [userEmail, setUserEmail] = useState(
+    () => localStorage.getItem("bytem_user_email") || null
+  );
   const [settings, setSettings] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!userEmail) return;
+    if (!userEmail) {
+      setSettings(null);
+      return;
+    }
 
+    let cancelled = false;
     async function load() {
       try {
-        const res = await fetch(`/api/settings-get?email=${encodeURIComponent(userEmail)}`);
+        const res = await fetch(
+          `/api/settings-get?email=${encodeURIComponent(userEmail)}`
+        );
         const data = await res.json();
+        if (cancelled) return;
         if (data.error) throw new Error(data.error);
 
         if (data.exists && data.settings) {
+          // Existing user — load their data unchanged.
           const loaded = { ...DEFAULT_SETTINGS, ...data.settings };
           setSettings(loaded);
           lsSet("bytem_settings_cache", loaded);
         } else {
-          const legacy = migrateFromLegacyLocalStorage();
-          const hasLegacyData = legacy.your_name || legacy.sheets_url;
-          const initial = hasLegacyData ? { ...DEFAULT_SETTINGS, ...legacy } : DEFAULT_SETTINGS;
+          // Brand-new user — create a default row so OAuth PATCHes work later.
+          const initial = { ...DEFAULT_SETTINGS };
           setSettings(initial);
+          lsSet("bytem_settings_cache", initial);
           await saveToSupabase(userEmail, initial);
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
+        if (cancelled) return;
         setLoadError(err.message);
         const cached = lsGet("bytem_settings_cache", null);
         setSettings(cached || DEFAULT_SETTINGS);
@@ -108,6 +104,7 @@ export function SettingsProvider({ children }) {
     }
 
     load();
+    return () => { cancelled = true; };
   }, [userEmail]);
 
   async function saveToSupabase(email, settingsObj) {
@@ -138,20 +135,31 @@ export function SettingsProvider({ children }) {
     return merged;
   }, [settings, userEmail]);
 
-  async function registerUser(email, initialSettings = {}) {
-    localStorage.setItem("bytem_user_email", email);
-    setUserEmail(email);
-    const initial = { ...DEFAULT_SETTINGS, ...initialSettings };
-    setSettings(initial);
-    lsSet("bytem_settings_cache", initial);
-    await saveToSupabase(email, initial);
+  // Set the active session. Loading happens in the useEffect above.
+  // Does NOT touch Supabase for users who already exist — only the load
+  // path inserts a default row when missing.
+  function setSession(email) {
+    const e = (email || "").trim().toLowerCase();
+    if (!e) return;
+    localStorage.setItem("bytem_user_email", e);
+    setUserEmail(e);
   }
 
-  // Force a fresh load from Supabase (used after OAuth redirects)
+  // Called from the onboarding wizard's final step. Writes only the fields
+  // the user filled in — never overwrites unrelated columns (gmail tokens,
+  // etc.) that were set by other flows.
+  async function completeOnboarding(patch) {
+    if (!userEmail) throw new Error("No active session");
+    return saveSettings(patch || {});
+  }
+
+  // Force a fresh load from Supabase (used after OAuth redirects).
   async function refreshSettings() {
     if (!userEmail) return;
     try {
-      const res = await fetch(`/api/settings-get?email=${encodeURIComponent(userEmail)}`);
+      const res = await fetch(
+        `/api/settings-get?email=${encodeURIComponent(userEmail)}`
+      );
       const data = await res.json();
       if (data.exists && data.settings) {
         const loaded = { ...DEFAULT_SETTINGS, ...data.settings };
@@ -177,9 +185,11 @@ export function SettingsProvider({ children }) {
     loadError,
     saving,
     userEmail,
-    registerUser,
+    setSession,
+    completeOnboarding,
     signOut,
     refreshSettings,
+    onboarded: isOnboarded(settings),
     get yourName() { return settings?.your_name || ""; },
     get companyName() { return settings?.company_name || ""; },
     get sheetsUrl() { return settings?.sheets_url || ""; },

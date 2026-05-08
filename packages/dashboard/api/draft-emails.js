@@ -64,6 +64,11 @@ export default async function handler(req, res) {
       const specificQty = getRelevantQuantity(supplier, inventoryReport)
         || `${totalCases} production cases`;
 
+      const fromLine = `${yourName || "the buyer"}${brandName ? ` at ${brandName}` : ""}`;
+      const signOff = brandName
+        ? `${yourName || "the buyer"}, ${brandName}`
+        : (yourName || "the buyer");
+
       const message = await client.messages.create({
         model: "claude-opus-4-6",
         max_tokens: 350,
@@ -71,7 +76,7 @@ export default async function handler(req, res) {
           role: "user",
           content: `Write a SHORT supplier outreach email. Real founder voice — like a text, not a letter.
 
-From: ${yourName || "Jack"} at ${brandName || "BYTE'M"}
+From: ${fromLine}
 To: ${supplier.name} (${supplier.product})
 Order quantity: ${specificQty}
 Est. unit price: $${supplier.price}
@@ -86,7 +91,7 @@ Hard rules:
 - One sentence: what you need and how much
 - One sentence: ask for pricing + lead time
 - Optional: one sentence on repeat order potential if relevant
-- Sign off: "${yourName || "Jack"}, ${brandName || "BYTE'M"}"
+- Sign off: "${signOff}"
 
 Return ONLY the email. First line must be "Subject: ..." — nothing before or after.`
         }]

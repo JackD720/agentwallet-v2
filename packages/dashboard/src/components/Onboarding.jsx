@@ -10,16 +10,15 @@ const ACCENT_BORDER = "#c8f4fd";
 const DARK = "#1a1a1a";
 
 export default function Onboarding() {
-  const { registerUser } = useSettings();
+  const { completeOnboarding, userEmail, signOut } = useSettings();
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Step 2 — Profile
+  // Step 2 — Profile (email comes from the magic-link session, not the form)
   const [yourName, setYourName] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [email, setEmail] = useState("");
 
   // Step 3 — Sheets
   const [sheetsUrl, setSheetsUrl] = useState("");
@@ -33,9 +32,9 @@ export default function Onboarding() {
   const [newSupplier, setNewSupplier] = useState({ name: "", email: "", product: "", price: "" });
   const [showAddSupplier, setShowAddSupplier] = useState(false);
 
-  // Step 5 — Recipes / BOM
+  // Step 5 — Recipes / BOM (one blank starter SKU, user fills or skips)
   const [recipes, setRecipes] = useState([
-    { id: 1, sku: "BB-001", name: "Product 1", unitsPerCase: 10, unitSize: "4.7", unitType: "bag", ingredients: [] }
+    { id: 1, sku: "", name: "", unitsPerCase: 1, unitSize: "", unitType: "unit", ingredients: [] }
   ]);
   const [activeRecipe, setActiveRecipe] = useState(0);
   const [newIngredient, setNewIngredient] = useState({ name: "", qty: "", unit: "lbs" });
@@ -55,7 +54,8 @@ export default function Onboarding() {
   // ── Recipe helpers ──
   function addSku() {
     const n = recipes.length + 1;
-    const updated = [...recipes, { id: Date.now(), sku: `BB-00${n}`, name: `Product ${n}`, unitsPerCase: 10, unitSize: "4.7", unitType: "bag", ingredients: [] }];
+    const padded = String(n).padStart(3, "0");
+    const updated = [...recipes, { id: Date.now(), sku: `SKU-${padded}`, name: "", unitsPerCase: 1, unitSize: "", unitType: "unit", ingredients: [] }];
     setRecipes(updated);
     setActiveRecipe(updated.length - 1);
   }
@@ -88,7 +88,13 @@ export default function Onboarding() {
     setLoading(true);
     setError(null);
     try {
-      await registerUser(email.trim().toLowerCase(), {
+      // Strip any blank starter SKU the user didn't bother filling out.
+      const cleanRecipes = recipes.filter(r =>
+        (r.sku && r.sku.trim()) ||
+        (r.name && r.name.trim()) ||
+        (r.ingredients && r.ingredients.length > 0)
+      );
+      await completeOnboarding({
         your_name: yourName.trim(),
         company_name: companyName.trim(),
         sheets_url: sheetsUrl.trim(),
@@ -98,7 +104,7 @@ export default function Onboarding() {
         inventory_col: inventoryCol.trim().toUpperCase() || "F",
         header_row: headerRow.trim() || "4",
         suppliers,
-        recipes,
+        recipes: cleanRecipes,
       });
     } catch {
       setError("Something went wrong. Please try again.");
@@ -177,10 +183,40 @@ export default function Onboarding() {
           {step === 2 && (
             <div style={{ padding: 32 }}>
               <StepHeader title="Your profile" sub="Used to sign supplier emails and identify your account" />
-              <Field label="Your name" placeholder="Jack Davis" value={yourName} onChange={setYourName} />
-              <Field label="Company name" placeholder="BYTE'M Brownies" value={companyName} onChange={setCompanyName} />
-              <Field label="Your email" placeholder="jack@bytem.com" value={email} onChange={setEmail} type="email" hint="Syncs your settings across all devices" />
-              {yourName && email && (
+              <Field label="Your name" placeholder="e.g. Jane Doe" value={yourName} onChange={setYourName} />
+              <Field label="Company name" placeholder="e.g. Acme Snacks" value={companyName} onChange={setCompanyName} />
+
+              {/* Signed-in email — read-only, not editable here */}
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
+                  Signed in as
+                </div>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 12px",
+                  border: "1px solid #ebebeb",
+                  borderRadius: 8,
+                  background: "#fafafa",
+                  fontSize: 13,
+                  color: DARK,
+                }}>
+                  <span>{userEmail}</span>
+                  <button
+                    type="button"
+                    onClick={() => signOut()}
+                    style={{ fontSize: 11, color: "#888", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}
+                  >
+                    not you?
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: "#ccc", marginTop: 4 }}>
+                  Settings sync to this account across devices.
+                </div>
+              </div>
+
+              {yourName && (
                 <div style={{ fontSize: 11, color: "#0a7a9a", background: ACCENT_BG, border: `1px solid ${ACCENT_BORDER}`, borderRadius: 8, padding: "8px 12px", marginBottom: 16 }}>
                   Emails will be signed: <strong>{yourName}{companyName ? `, ${companyName}` : ""}</strong>
                 </div>
@@ -190,7 +226,6 @@ export default function Onboarding() {
                 onBack={() => setStep(1)}
                 onNext={() => {
                   if (!yourName.trim()) { setError("Name is required."); return; }
-                  if (!email.trim() || !email.includes("@")) { setError("Valid email is required."); return; }
                   setError(null); setStep(3);
                 }}
               />
